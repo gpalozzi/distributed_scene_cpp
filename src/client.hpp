@@ -58,7 +58,7 @@ public:
     }
     
     // send mesh on socket
-    void write_mesh(const Mesh& mesh)
+    void write_mesh(const Mesh* mesh)
     {
         io_service_.post(
                          [this, mesh]()

@@ -147,6 +147,7 @@
 		B60CD7B11A01113E009046F5 /* shuttle0.0ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.0ply.json; path = scenes/shuttle0.0ply.json; sourceTree = "<group>"; };
 		B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.1ply.json; path = scenes/shuttle0.1ply.json; sourceTree = "<group>"; };
 		B60CD7B31A01113E009046F5 /* shuttle0.ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.ply.json; path = scenes/shuttle0.ply.json; sourceTree = "<group>"; };
+		B60CD7B51A01561D009046F5 /* cube_blue.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_blue.json; path = scenes/cube_blue.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -336,6 +337,7 @@
 			isa = PBXGroup;
 			children = (
 				B60CD7B01A01113E009046F5 /* cube.json */,
+				B60CD7B51A01561D009046F5 /* cube_blue.json */,
 				B60CD7B11A01113E009046F5 /* shuttle0.0ply.json */,
 				B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */,
 				B60CD7B31A01113E009046F5 /* shuttle0.ply.json */,

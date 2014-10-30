@@ -47,6 +47,9 @@ int gl_vertex_shader_id = 0;    // OpenGL vertex shader handle
 int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
 
+map<timestamp_t,Mesh*> mesh_history;
+int mesh_history_counter = 0;
+
 // check if an OpenGL error
 void error_if_glerror() {
 	auto error = glGetError();
@@ -290,6 +293,38 @@ bool mesh_rot = false;
 bool have_msg = false;
 bool restore_old = false;
 
+// swap 2 mesh
+void swap_mesh(Mesh* new_mesh, Mesh* old_mesh, bool save_history){
+    // update mesh pointers for this id
+    auto i = indexof(scene->ids_map[new_mesh->_id_].as_mesh(), scene->meshes);
+    if( i >= 0){
+        if (save_history) {
+            auto clone = new Mesh(*scene->meshes[i]);
+            mesh_history.emplace(mesh_history_counter++,clone);
+        }
+        scene->meshes[i] = new_mesh;
+        scene->ids_map[new_mesh->_id_]._me = new_mesh;
+        //scene->ids_map[new_mesh->_id_] = *new id_reference(new_mesh,new_mesh->_id_);
+    }
+    else{
+        // add new mesh
+        scene->meshes.push_back(new_mesh);
+        scene->ids_map.emplace(new_mesh->_id_,*new id_reference(new_mesh,new_mesh->_id_));
+    }
+    // update mesh material
+    i = indexof(scene->ids_map[new_mesh->mat->_id_].as_material(), scene->materials);
+    if( i >= 0){
+        scene->materials[i] = new_mesh->mat;
+        scene->ids_map[new_mesh->mat->_id_]._m = new_mesh->mat;
+        //scene->ids_map[new_mesh->mat->_id_] = *new id_reference(new_mesh->mat,new_mesh->mat->_id_);
+    }
+    else{
+        scene->materials.push_back(new_mesh->mat);
+        scene->ids_map.emplace(new_mesh->mat->_id_,*new id_reference(new_mesh->mat,new_mesh->mat->_id_));
+    }
+    
+}
+
 // glfw callback for character input
 void character_callback(GLFWwindow* window, unsigned int key) {
 	switch (key) {
@@ -319,7 +354,6 @@ void character_callback(GLFWwindow* window, unsigned int key) {
 
 // uiloop
 void uiloop(editor_server* server) {
-	//Scene backup_scene = *new Scene(*scene);
 	auto ok = glfwInit();
 	error_if_not(ok, "glfw init error");
 	
@@ -418,21 +452,27 @@ void uiloop(editor_server* server) {
 		
 		while(server->has_pending_mesh()){
 			// get the next mesh recived
-			auto mesh = new Mesh(*server->get_next_mesh());
-			// update mesh pointers for this id
+            auto mesh = server->get_next_mesh();
+            // update mesh pointers for this id
 			auto i = indexof(scene->ids_map[mesh->_id_].as_mesh(), scene->meshes);
 			if( i >= 0){
+                auto clone = new Mesh(*scene->meshes[i]);
+                mesh_history.emplace(mesh_history_counter++,clone);
 				scene->meshes[i] = mesh;
-				scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
+                scene->ids_map[mesh->_id_]._me = mesh;
+				//scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
 			}
 			else{
+                // add new mesh
 				scene->meshes.push_back(mesh);
 				scene->ids_map.emplace(mesh->_id_,*new id_reference(mesh,mesh->_id_));
 			}
+            // update mesh material
 			i = indexof(scene->ids_map[mesh->mat->_id_].as_material(), scene->materials);
 			if( i >= 0){
 				scene->materials[i] = mesh->mat;
-				scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
+                scene->ids_map[mesh->mat->_id_]._m = mesh->mat;
+				//scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
 			}
 			else{
 				scene->materials.push_back(mesh->mat);
@@ -444,8 +484,11 @@ void uiloop(editor_server* server) {
 		}
 		
 		if(restore_old){
-			//Scene temp = *new Scene(backup_scene);
-			//scene = &temp;
+            message("mesh history\n");
+            for(auto m : mesh_history){
+                message("id %llu\n",m.first);
+            }
+            swap_mesh(mesh_history[mesh_history_counter-1],nullptr,true);
 			restore_old = false;
 		}
 		

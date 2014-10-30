@@ -30,12 +30,12 @@ public:
     {
     }
     
-    mesh_msg(const Mesh& mesh )
+    mesh_msg(const Mesh* mesh )
     {
         // Serialize the mesh.
         std::ostringstream archive_stream;
         boost::archive::text_oarchive archive(archive_stream);
-        archive << mesh;
+        archive << *mesh;
         
         body_length_ = archive_stream.str().size();
         
@@ -43,7 +43,7 @@ public:
         header_stream << std::setw(header_length) << std::hex << body_length_;
         
         if(!header_stream || header_stream.str().size() != header_length){
-            message("Header size > max header length for mesh (id: %llu)", mesh._id_);
+            message("Header size > max header length for mesh (id: %llu)", mesh->_id_);
             body_length_ = 0;
         }
         else{

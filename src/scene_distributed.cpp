@@ -23,6 +23,7 @@ vector<image3f*> get_textures(Scene* scene) {
     return vector<image3f*>(textures.begin(),textures.end());
 }
 
+
 Camera* lookat_camera(vec3f eye, vec3f center, vec3f up, float width, float height, float dist, timestamp_t id) {
     auto camera = new Camera();
     camera->_id_ = id;

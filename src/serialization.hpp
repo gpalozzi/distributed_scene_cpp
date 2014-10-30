@@ -123,6 +123,7 @@ namespace boost {
         void serialize(Archive & ar, Mesh& m, const unsigned int version)
         {
             ar & m.frame;
+            ar & m.mat;
             ar & m.vertex_ids;
             ar & m.pos;
             ar & m.normal_ids;
@@ -142,7 +143,6 @@ namespace boost {
             ar & m.line;
             ar & m.spline;
             ar & m.vertex_id_map;
-            ar & m.mat;
             ar & m._id_;
         }
         

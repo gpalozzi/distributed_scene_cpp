@@ -397,7 +397,7 @@ void uiloop(editor_client* client) {
         }
         */
         if(send_mesh){
-            client->write_mesh(*scene->meshes[0]);
+            client->write_mesh(scene->meshes[0]);
             send_mesh = false;
         }
         

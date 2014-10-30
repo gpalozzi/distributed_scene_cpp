@@ -30,8 +30,30 @@ struct Material {
     bool        microfacet = false; // use microfacet formulation
     
     timestamp_t         _id_ = 0;                      // unique id
-
+    
+    Material() {}
+    Material(const Material& mat){
+        ke = mat.ke;
+        kd = mat.kd;
+        ks = mat.ks;
+        n = mat.n;
+        kr = mat.kr;
+        _id_ = mat._id_;
+    }
+    
+    Material& operator=(const Material& mat)
+    {
+        ke = mat.ke;
+        kd = mat.kd;
+        ks = mat.ks;
+        n = mat.n;
+        kr = mat.kr;
+        _id_ = mat._id_;
+        return *this;
+    }
 };
+
+
 
 // Keyframed Animation Data
 struct FrameAnimation {
@@ -117,6 +139,32 @@ struct Mesh {
     BVHAccelerator* bvh = nullptr;              // bvh accelerator for intersection
     
     timestamp_t         _id_ = 0;                      // unique id
+    
+    Mesh() {}
+    Mesh(const Mesh& mesh)
+    {
+        frame = mesh.frame;
+        vertex_ids = mesh.vertex_ids;
+        pos = mesh.pos;
+        normal_ids = mesh.normal_ids;
+        norm = mesh.norm;
+        texcoord_ids = mesh.texcoord_ids;
+        texcoord = mesh.texcoord;
+        triangle_ids = mesh.triangle_ids;
+        triangle = mesh.triangle;
+        triangle_index = mesh.triangle_index;
+        quad_ids = mesh.quad_ids;
+        quad = mesh.quad;
+        quad_index = mesh.quad_index;
+        edge_ids = mesh.edge_ids;
+        edge = mesh.edge;
+        edge_index = mesh.edge_index;
+        vertex_id_map = mesh.vertex_id_map;
+        _id_ = mesh._id_;
+        
+        mat = new Material();
+        *mat = *mesh.mat;
+    }
 };
 
 // surface made of eitehr a spehre or a quad (as determined by
