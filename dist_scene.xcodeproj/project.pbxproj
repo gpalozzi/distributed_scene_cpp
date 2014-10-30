@@ -55,6 +55,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B603F6001A024975005D10BE /* cube_red.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_red.json; path = scenes/cube_red.json; sourceTree = "<group>"; };
+		B603F6011A024983005D10BE /* cube_green.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_green.json; path = scenes/cube_green.json; sourceTree = "<group>"; };
 		B60CD6EE1A00F19E009046F5 /* id_reference.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = id_reference.h; path = src/id_reference.h; sourceTree = "<group>"; };
 		B60CD6EF1A00F19E009046F5 /* image.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = image.h; path = src/image.h; sourceTree = "<group>"; };
 		B60CD6F01A00F19E009046F5 /* json.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = json.h; path = src/json.h; sourceTree = "<group>"; };
@@ -143,7 +145,6 @@
 		B60CD7581A00F684009046F5 /* lodepng.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = lodepng.cpp; path = src/lodepng.cpp; sourceTree = "<group>"; };
 		B60CD76A1A01028F009046F5 /* libglfw3.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libglfw3.a; path = ext/osx/lib/GLFW/libglfw3.a; sourceTree = "<group>"; };
 		B60CD77B1A010BFA009046F5 /* client */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = client; sourceTree = BUILT_PRODUCTS_DIR; };
-		B60CD7B01A01113E009046F5 /* cube.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube.json; path = scenes/cube.json; sourceTree = "<group>"; };
 		B60CD7B11A01113E009046F5 /* shuttle0.0ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.0ply.json; path = scenes/shuttle0.0ply.json; sourceTree = "<group>"; };
 		B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.1ply.json; path = scenes/shuttle0.1ply.json; sourceTree = "<group>"; };
 		B60CD7B31A01113E009046F5 /* shuttle0.ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.ply.json; path = scenes/shuttle0.ply.json; sourceTree = "<group>"; };
@@ -336,7 +337,8 @@
 		B60CD7B41A011146009046F5 /* scenes */ = {
 			isa = PBXGroup;
 			children = (
-				B60CD7B01A01113E009046F5 /* cube.json */,
+				B603F6001A024975005D10BE /* cube_red.json */,
+				B603F6011A024983005D10BE /* cube_green.json */,
 				B60CD7B51A01561D009046F5 /* cube_blue.json */,
 				B60CD7B11A01113E009046F5 /* shuttle0.0ply.json */,
 				B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */,
@@ -652,6 +654,7 @@
 				B60CD7101A00F425009046F5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		B60CD77F1A010BFA009046F5 /* Build configuration list for PBXNativeTarget "client" */ = {
 			isa = XCConfigurationList;
@@ -660,6 +663,7 @@
 				B60CD7811A010BFA009046F5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

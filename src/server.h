@@ -82,11 +82,11 @@ public:
     {
         if(m_msg.body_length()){
             // track meshes history on scene
-            meshes_history_.push_back(m_msg);
+            //meshes_history_.push_back(m_msg);
             // put this mesh as pending
             pending_meshes_.push_back(m_msg);
-            while (edit_history_.size() > max_recent_msgs)
-                edit_history_.pop_front();
+            //while (edit_history_.size() > max_recent_msgs)
+            //    edit_history_.pop_front();
             
             // send mesh to partecipant
             for (auto participant: participants_)
@@ -135,7 +135,7 @@ private:
     enum { max_recent_msgs = 100 };
     op_message_queue edit_history_;
     op_message_queue pending_op_;
-    mesh_message_queue meshes_history_;
+    //mesh_message_queue meshes_history_;
     mesh_message_queue pending_meshes_;
     Mesh current_mesh;
 };

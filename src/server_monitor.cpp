@@ -48,7 +48,6 @@ int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
 
 map<timestamp_t,Mesh*> mesh_history;
-int mesh_history_counter = 0;
 
 // check if an OpenGL error
 void error_if_glerror() {
@@ -300,7 +299,7 @@ void swap_mesh(Mesh* new_mesh, Mesh* old_mesh, bool save_history){
     if( i >= 0){
         if (save_history) {
             auto clone = new Mesh(*scene->meshes[i]);
-            mesh_history.emplace(mesh_history_counter++,clone);
+            mesh_history.emplace(get_timestamp(),clone);
         }
         scene->meshes[i] = new_mesh;
         scene->ids_map[new_mesh->_id_]._me = new_mesh;
@@ -457,7 +456,7 @@ void uiloop(editor_server* server) {
 			auto i = indexof(scene->ids_map[mesh->_id_].as_mesh(), scene->meshes);
 			if( i >= 0){
                 auto clone = new Mesh(*scene->meshes[i]);
-                mesh_history.emplace(mesh_history_counter++,clone);
+                mesh_history.emplace(get_timestamp(),clone);
 				scene->meshes[i] = mesh;
                 scene->ids_map[mesh->_id_]._me = mesh;
 				//scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
@@ -484,11 +483,19 @@ void uiloop(editor_server* server) {
 		}
 		
 		if(restore_old){
+            vector<timestamp_t> choices;
+            int choice = 1;
             message("mesh history\n");
             for(auto m : mesh_history){
-                message("id %llu\n",m.first);
+                message("[%d] %llu\n",choice++,m.first);
+                choices.push_back(m.first);
             }
-            swap_mesh(mesh_history[mesh_history_counter-1],nullptr,true);
+            message("Mesh to restore (0 = exit): ");
+            choice = 0;
+            std::cin >> choice;
+            if (choice > 0 ) {
+                swap_mesh(mesh_history[choices[choice-1]],nullptr,true);
+            }
 			restore_old = false;
 		}
 		

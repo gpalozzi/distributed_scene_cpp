@@ -47,6 +47,8 @@ int gl_vertex_shader_id = 0;    // OpenGL vertex shader handle
 int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
 
+map<timestamp_t,Mesh*> mesh_history;
+
 // check if an OpenGL error
 void error_if_glerror() {
     auto error = glGetError();
@@ -287,7 +289,39 @@ bool mesh_ver = false;
 bool mesh_rot = false;
 bool have_msg = false;
 bool send_mesh = false;
+bool restore_old = false;
 
+// swap 2 mesh
+void swap_mesh(Mesh* new_mesh, Mesh* old_mesh, bool save_history){
+    // update mesh pointers for this id
+    auto i = indexof(scene->ids_map[new_mesh->_id_].as_mesh(), scene->meshes);
+    if( i >= 0){
+        if (save_history) {
+            auto clone = new Mesh(*scene->meshes[i]);
+            mesh_history.emplace(get_timestamp(),clone);
+        }
+        scene->meshes[i] = new_mesh;
+        scene->ids_map[new_mesh->_id_]._me = new_mesh;
+        //scene->ids_map[new_mesh->_id_] = *new id_reference(new_mesh,new_mesh->_id_);
+    }
+    else{
+        // add new mesh
+        scene->meshes.push_back(new_mesh);
+        scene->ids_map.emplace(new_mesh->_id_,*new id_reference(new_mesh,new_mesh->_id_));
+    }
+    // update mesh material
+    i = indexof(scene->ids_map[new_mesh->mat->_id_].as_material(), scene->materials);
+    if( i >= 0){
+        scene->materials[i] = new_mesh->mat;
+        scene->ids_map[new_mesh->mat->_id_]._m = new_mesh->mat;
+        //scene->ids_map[new_mesh->mat->_id_] = *new id_reference(new_mesh->mat,new_mesh->mat->_id_);
+    }
+    else{
+        scene->materials.push_back(new_mesh->mat);
+        scene->ids_map.emplace(new_mesh->mat->_id_,*new id_reference(new_mesh->mat,new_mesh->mat->_id_));
+    }
+    
+}
 // glfw callback for character input
 void character_callback(GLFWwindow* window, unsigned int key) {
     switch (key) {
@@ -312,6 +346,9 @@ void character_callback(GLFWwindow* window, unsigned int key) {
             break;
         case 'u':
             send_mesh = true;
+            break;
+        case 'r':
+            restore_old = true;
             break;
 
     }
@@ -403,12 +440,16 @@ void uiloop(editor_client* client) {
         
         while(client->has_pending_mesh()){
             // get the next mesh recived
-            auto mesh = new Mesh(*client->get_next_mesh());
+            auto mesh = client->get_next_mesh();
+            //auto mesh = new Mesh(*client->get_next_mesh());
             // update mesh pointers for this id
             auto i = indexof(scene->ids_map[mesh->_id_].as_mesh(), scene->meshes);
             if( i >= 0){
+                auto clone = new Mesh(*scene->meshes[i]);
+                mesh_history.emplace(get_timestamp(),clone);
                 scene->meshes[i] = mesh;
-                scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
+                scene->ids_map[mesh->_id_]._me = mesh;
+                //scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
             }
             else{
                 scene->meshes.push_back(mesh);
@@ -417,7 +458,8 @@ void uiloop(editor_client* client) {
             i = indexof(scene->ids_map[mesh->mat->_id_].as_material(), scene->materials);
             if( i >= 0){
                 scene->materials[i] = mesh->mat;
-                scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
+                scene->ids_map[mesh->mat->_id_]._m = mesh->mat;
+                //scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
             }
             else{
                 scene->materials.push_back(mesh->mat);
@@ -429,6 +471,22 @@ void uiloop(editor_client* client) {
             client->remove_first_mesh();
         }
         
+        if(restore_old){
+            vector<timestamp_t> choices;
+            int choice = 1;
+            message("mesh history\n");
+            for(auto m : mesh_history){
+                message("[%d] %llu\n",choice++,m.first);
+                choices.push_back(m.first);
+            }
+            message("Mesh to restore (0 = exit): ");
+            choice = 0;
+            std::cin >> choice;
+            if (choice > 0 ) {
+                swap_mesh(mesh_history[choices[choice-1]],nullptr,true);
+            }
+            restore_old = false;
+        }
         
         /*
         if(have_msg){

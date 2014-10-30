@@ -58,7 +58,7 @@ public:
     // get vector mesh position
     char* operator[](int i) { if (i < mesh_msg_data_.size()-1) return &mesh_msg_data_[i]; else message("Access to member out of bound"); return nullptr; }
     
-    // get all data
+    // get all mesh
     const void mesh(Mesh &mesh) const
     {
         std::string archive_data(&mesh_msg_data_[header_length], body_length_);
