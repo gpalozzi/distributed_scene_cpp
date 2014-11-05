@@ -1,6 +1,6 @@
 #include "scene_distributed.h"
-#include "tesselation.h"
 #include "id_reference.h"
+#include <iostream>
 
 // reference to solve
 vector<id_reference*> ref_to_solve;
@@ -21,6 +21,24 @@ vector<image3f*> get_textures(Scene* scene) {
     }
     if(scene->background_txt) textures.insert(scene->background_txt);
     return vector<image3f*>(textures.begin(),textures.end());
+}
+
+map<timestamp_t,Mesh*> mesh_history;
+map<timestamp_t,SubMesh*> submesh_history;
+
+Mesh* get_mesh_to_restrore(){
+    vector<timestamp_t> choices;
+    int choice = 1;
+    message("mesh history\n");
+    for(auto m : mesh_history){
+        message("[%d] %llu\n",choice++,m.first);
+        choices.push_back(m.first);
+    }
+    message("Mesh to restore (0 = exit): ");
+    choice = 0;
+    std::cin >> choice;
+    if (choice > 0 && choice <= mesh_history.size()) return mesh_history[choices[choice-1]];
+    return nullptr;
 }
 
 
@@ -61,13 +79,10 @@ void json_set_values(const jsonvalue& json, int* value, int n) {
     error_if_not(n == json.array_size(), "incorrect array size");
     for(auto i : range(n)) value[i] = json.array_element(i).as_int();
 }
-
 void json_set_values(const jsonvalue& json, timestamp_t* value, int n) {
     error_if_not(n == json.array_size(), "incorrect array size");
     for(auto i : range(n)) value[i] = (timestamp_t)json.array_element(i).as_id();
 }
-
-
 void json_set_value(const jsonvalue& json, bool& value) { value = json.as_bool(); }
 void json_set_value(const jsonvalue& json, int& value) { value = json.as_int(); }
 void json_set_value(const jsonvalue& json, float& value) { value = json.as_double(); }
@@ -123,8 +138,6 @@ void json_set_optvalue(const jsonvalue& json, T& value, const string& name) {
     if(not json.object_contains(name)) return;
     json_set_value(json.object_element(name), value);
 }
-
-
 
 template<typename T>
 void add_reference(T& value, const jsonvalue& json) {
@@ -273,6 +286,7 @@ MeshSimulation* json_parse_mesh_simulation(const jsonvalue& json) {
     return simulation;
 }
 
+/*
 // deprecated: too slow
 void init_mesh_properties_from_array(Mesh* mesh){
     auto quad_indices = mesh->quad_index.empty();
@@ -337,10 +351,20 @@ void init_mesh_properties_from_array(Mesh* mesh){
         }
     }
 };
+*/
 
-void init_mesh_properties_from_map(Mesh* mesh){
-    auto quad_indices = mesh->quad_index.empty();
-    auto norm = mesh->norm.empty();
+void init_mesh_properties_from_map(Mesh* mesh, bool force_quad_update, bool force_triangle_update, bool force_edges_update, bool force_norm_update){
+    auto quad_indices = mesh->quad_index.empty() or force_quad_update;
+    auto triangle_indices = mesh->triangle_index.empty() or force_triangle_update;
+    auto edges_indices = mesh->edge_index.empty() or force_edges_update;
+    auto norm = mesh->norm.empty() or force_norm_update;
+    
+    // clear previous vector
+    if (force_quad_update) mesh->quad_index.clear();
+    if (force_triangle_update) mesh->triangle_index.clear();
+    if (force_edges_update) mesh->edge_index.clear();
+    if (force_norm_update) mesh->norm.clear();
+
     vector<int> faces_per_vert;
     
     if (norm) {
@@ -352,10 +376,10 @@ void init_mesh_properties_from_map(Mesh* mesh){
         // for each quad
         for(auto quad : mesh->quad){
             // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[quad.first];
-            auto b = mesh->vertex_id_map[quad.second];
-            auto c = mesh->vertex_id_map[quad.third];
-            auto d = mesh->vertex_id_map[quad.fourth];
+            auto a = mesh->vertex_id_map[quad.second.first];
+            auto b = mesh->vertex_id_map[quad.second.second];
+            auto c = mesh->vertex_id_map[quad.second.third];
+            auto d = mesh->vertex_id_map[quad.second.fourth];
             
             // put this 4 indices in vector
             if (quad_indices) mesh->quad_index.push_back({a,b,c,d});
@@ -371,16 +395,17 @@ void init_mesh_properties_from_map(Mesh* mesh){
                 faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++; faces_per_vert[d]++;
             }
         }
-        
+    }
+    if (norm or triangle_indices) {
         // for each triangle
         for(auto triangle : mesh->triangle){
             // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[triangle.first];
-            auto b = mesh->vertex_id_map[triangle.second];
-            auto c = mesh->vertex_id_map[triangle.third];
+            auto a = mesh->vertex_id_map[triangle.second.first];
+            auto b = mesh->vertex_id_map[triangle.second.second];
+            auto c = mesh->vertex_id_map[triangle.second.third];
             
             // put this 3 indices in vector
-            if (quad_indices) mesh->triangle_index.push_back({a,b,c});
+            if (triangle_indices) mesh->triangle_index.push_back({a,b,c});
             
             // compute normals
             if (norm){
@@ -392,15 +417,45 @@ void init_mesh_properties_from_map(Mesh* mesh){
                 faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++;
             }
         }
-        
-        // apply mean to normals
-        if(norm){
-            for(auto i : range(mesh->norm.size()) ){ if(auto mean = faces_per_vert[i]) mesh->norm[i] /= mean; }
-            // delete
-            faces_per_vert.clear();
-        }
     }
-};
+    // apply mean to normals
+    if(norm){
+        for(auto i : range(mesh->norm.size()) ){ if(auto mean = faces_per_vert[i]) mesh->norm[i] /= mean; }
+        // delete
+        faces_per_vert.clear();
+    }
+    if (edges_indices) {
+        // for each edge
+        for(auto edge : mesh->edge){
+            // for each vertex find the id in vertices vector and get the index
+            auto a = mesh->vertex_id_map[edge.second.first];
+            auto b = mesh->vertex_id_map[edge.second.second];
+            
+            // put this 2 indices in vector
+            mesh->edge_index.push_back({a,b});
+        }
+    }    
+}
+
+void indexing_vertex_position(Mesh* mesh){
+    vector<vec3f> temp = mesh->pos;
+    vector<vec3f> temp_norm;
+    // if normal per vertex are already computed
+    if (not mesh->norm.empty()){
+        temp_norm = mesh->norm;
+        mesh->norm.clear();
+    }
+    mesh->pos.clear();
+    for (auto& vertex : mesh->vertex_id_map){
+        // move vertex norm if needed
+        if (not mesh->norm.empty()) mesh->norm.push_back(temp_norm[vertex.second]);
+        // move vertex position
+        mesh->pos.push_back(temp[vertex.second]);
+        vertex.second = mesh->pos.size()-1;
+    }
+    temp_norm.clear();
+    temp.clear();
+}
 
 Mesh* json_parse_mesh(const jsonvalue& json) {
     auto mesh = new Mesh();
@@ -438,6 +493,8 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             //mesh->vertex_ids.push_back(_id);
             mesh->pos.push_back(v);
         }
+        // keep vertex pos indexed by vertex id map ordering
+        indexing_vertex_position(mesh);
     }
     
     // triangle
@@ -448,8 +505,9 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(triangle, _id, "_id_");
             auto v = vec3id();
             json_set_optvalue(triangle, v, "ver_ids");
-            mesh->triangle_ids.push_back(_id);
-            mesh->triangle.push_back(v);
+            //mesh->triangle_ids.push_back(_id);
+            //mesh->triangle.push_back(v);
+            mesh->triangle.emplace(_id,v);
         }
     }
     
@@ -461,8 +519,9 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(quad, _id, "_id_");
             auto v = vec4id();
             json_set_optvalue(quad, v, "ver_ids");
-            mesh->quad_ids.push_back(_id);
-            mesh->quad.push_back(v);
+            //mesh->quad_ids.push_back(_id);
+            //mesh->quad.push_back(v);
+            mesh->quad.emplace(_id,v);
         }
     }
     
@@ -474,16 +533,17 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(edge, _id, "_id_");
             auto v = vec2id();
             json_set_optvalue(edge, v, "ver_ids");
-            mesh->edge_ids.push_back(_id);
-            mesh->edge.push_back(v);
+            //mesh->edge_ids.push_back(_id);
+            //mesh->edge.push_back(v);
+            mesh->edge.emplace(_id,v);
         }
     }
 
     //if(json.object_contains("norm")) json_set_optvalue(json, mesh->norm, "norm");
     //if(json.object_contains("quad_index")) json_set_optvalue(json, mesh->quad_index, "quad_index");
     
-    init_mesh_properties_from_map(mesh);
-
+    init_mesh_properties_from_map(mesh, false, false, false, false);
+    json_set_optvalue(json, mesh->_version, "version");
 
     /*
     json_set_optvalue(json, mesh->pos, "pos");
@@ -575,6 +635,214 @@ void solve_references(Scene* scene){
             else message("cannot solve reference for material id %d - mat default applied\n",r->_id); // leave default material
         }
     }
+}
+
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
+    
+    if (save_history) {
+        auto clone = new Mesh(*mesh);
+        mesh_history.emplace(get_timestamp(),clone);
+    }
+    
+    auto need_update_pos_faces = not submesh->remove_vertex.empty();
+    
+    // add new vertex
+    for (auto v : submesh->add_vertex){
+        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
+        mesh->pos.push_back(v.second);
+        mesh->norm.push_back(zero3f);
+    }
+    // update existing vertex
+    for (auto v : submesh->update_vertex) mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
+
+    // vertex delete
+    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);    
+
+    // restore vertex position indexing
+    if(need_update_pos_faces) indexing_vertex_position(mesh);
+
+    // remove edges
+    for (auto edge : submesh->remove_edge){
+        /*
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
+         mesh->edge_index.erase(mesh->edge_index.begin()+index);
+         }
+         */
+        mesh->edge.erase(edge);
+    }
+    
+    // remove triangles
+    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
+    
+    // remove quads
+    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
+    
+    // add edges
+    for (auto edge : submesh->add_edge){
+        mesh->edge.insert(edge);
+        /*
+         auto pair = mesh->edge.insert(edge);
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), pair.first);
+         // for each vertex find the id in vertices vector and get the index
+         auto a = mesh->vertex_id_map[edge.second.first];
+         auto b = mesh->vertex_id_map[edge.second.second];
+         
+         // put this 2 indices in vector
+         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
+         }
+         */
+    }
+    
+    // add triangles
+    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    
+    // add quads
+    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    
+    // set mesh version for shuttle
+    mesh->_version = submesh->_version;
+    
+    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
+    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
+    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
+    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
+    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
+    not submesh->update_vertex.empty();
+    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
+}
+
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes_check(Mesh* mesh, Mesh* real_mesh, SubMesh* submesh, bool save_history){
+    if (save_history) {
+        auto clone = new Mesh(*mesh);
+        mesh_history.emplace(get_timestamp(),clone);
+    }
+    
+    auto need_update_pos_faces = not submesh->remove_vertex.empty();
+    
+    // add new vertex
+    for (auto v : submesh->add_vertex){
+        // check
+        if ( real_mesh->vertex_id_map.find(v.first) == real_mesh->vertex_id_map.end() or
+            not (real_mesh->pos[real_mesh->vertex_id_map[v.first]] == v.second))
+            message("[add_vertex] error for %llu",v.first);
+
+        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
+        mesh->pos.push_back(v.second);
+        mesh->norm.push_back(zero3f);
+    }
+    // update existing vertex
+    for (auto v : submesh->update_vertex){
+        // check
+        if ( real_mesh->vertex_id_map.find(v.first) == real_mesh->vertex_id_map.end() or
+            not (real_mesh->pos[real_mesh->vertex_id_map[v.first]] == v.second))
+            message("[update_vertex] error for %llu",v.first);
+        
+        mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
+    }
+    
+    // vertex delete
+    for (auto v : submesh->remove_vertex){
+        if (  real_mesh->vertex_id_map.find(v) != real_mesh->vertex_id_map.end())
+            message("[remove_vertex] error for %llu",v);
+        
+        mesh->vertex_id_map.erase(v);
+    }
+    
+    // restore vertex position indexing
+    if(need_update_pos_faces) indexing_vertex_position(mesh);
+    
+    
+    
+    
+    // remove edges
+    for (auto edge : submesh->remove_edge){
+        /*
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
+         mesh->edge_index.erase(mesh->edge_index.begin()+index);
+         }
+         */
+        mesh->edge.erase(edge);
+    }
+    
+    // remove triangles
+    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
+    
+    // remove quads
+    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
+    
+    // add edges
+    for (auto edge : submesh->add_edge){
+        mesh->edge.insert(edge);
+        /*
+         auto pair = mesh->edge.insert(edge);
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), pair.first);
+         // for each vertex find the id in vertices vector and get the index
+         auto a = mesh->vertex_id_map[edge.second.first];
+         auto b = mesh->vertex_id_map[edge.second.second];
+         
+         // put this 2 indices in vector
+         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
+         }
+         */
+    }
+    
+    // add triangles
+    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    
+    // add quads
+    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    
+    // set mesh version for shuttle
+    mesh->_version = submesh->_version;
+    
+    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
+    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
+    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
+    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
+    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
+    not submesh->update_vertex.empty();
+    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
+}
+
+
+// swap 2 mesh
+void swap_mesh(Mesh* mesh, Scene* scene, bool save_history){
+    // update mesh pointers for this id
+    auto i = indexof(scene->ids_map[mesh->_id_].as_mesh(), scene->meshes);
+    if( i >= 0){
+        if (save_history) {
+            auto clone = new Mesh(*scene->meshes[i]);
+            mesh_history.emplace(get_timestamp(),clone);
+        }
+        scene->meshes[i] = mesh;
+        scene->ids_map[mesh->_id_]._me = mesh;
+        //scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
+    }
+    else{
+        // add new mesh
+        scene->meshes.push_back(mesh);
+        scene->ids_map.emplace(mesh->_id_,*new id_reference(mesh,mesh->_id_));
+    }
+    // update mesh material
+    i = indexof(scene->ids_map[mesh->mat->_id_].as_material(), scene->materials);
+    if( i >= 0){
+        scene->materials[i] = mesh->mat;
+        scene->ids_map[mesh->mat->_id_]._m = mesh->mat;
+        //scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
+    }
+    else{
+        scene->materials.push_back(mesh->mat);
+        scene->ids_map.emplace(mesh->mat->_id_,*new id_reference(mesh->mat,mesh->mat->_id_));
+    }
+    
 }
 
 Scene* json_parse_scene(const jsonvalue& json) {

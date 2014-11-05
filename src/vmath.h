@@ -53,7 +53,7 @@ struct vec2id {
 };
 
 // ids pair equality  -----------------------
-inline bool operator==(const vec2id& a, const vec2id& b) { return (a.first==b.first and a.second==b.second) or (a.first==b.second and a.second==b.first); }
+inline bool operator==(const vec2id& a, const vec2id& b) { return a.first==b.first and a.second==b.second; }
 
 
 // 3 ids
@@ -73,6 +73,10 @@ struct vec3id {
     timestamp_t operator[](int i) const { return (&first)[i]; }
 };
 
+// 3 ids equality  -----------------------
+inline bool operator==(const vec3id& a, const vec3id& b) { return a.first==b.first and a.second==b.second and a.third==b.third; }
+
+
 // 4 ids
 struct vec4id {
     timestamp_t first; // first id
@@ -90,6 +94,10 @@ struct vec4id {
     // Element access
     timestamp_t operator[](int i) const { return (&first)[i]; }
 };
+
+// 4ids equality  -----------------------
+inline bool operator==(const vec4id& a, const vec4id& b) { return a.first==b.first and a.second==b.second and a.third==b.third and a.fourth==b.fourth; }
+
 
 // find in vector  -----------------------
 template<typename T> inline int indexof(const T obj, const vector<T> vec) { return find(vec.begin(), vec.end(), obj) - vec.begin(); }

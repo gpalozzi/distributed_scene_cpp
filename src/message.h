@@ -1,8 +1,3 @@
-//
-// op_message.h
-// ~~~~~~~~~~~~~~~~
-//
-
 #ifndef OP_MESSAGE_H
 #define OP_MESSAGE_H
 

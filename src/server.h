@@ -1,12 +1,6 @@
-//
-// editor_server.cpp
-// ~~~~~~~~~~~~~~~
-//
-// Copyright (c) 2003-2013 Christopher M. Kohlhoff (chris at kohlhoff dot com)
-//
-// Distributed under the Boost Software License, Version 1.0. (See accompanying
-// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-//
+#ifndef tgl_server_h
+#define tgl_server_h
+
 
 #include <cstdlib>
 #include <deque>
@@ -123,7 +117,20 @@ public:
         return nullptr;
     }
     
+    mesh_msg* get_next_pending(){
+        if(!pending_meshes_.empty()){
+            return &pending_meshes_.front();
+            
+        }
+        return nullptr;
+    }
+    
     void remove_first_mesh(){
+        if(!pending_meshes_.empty())
+            return pending_meshes_.pop_front();
+    }
+    
+    void remove_first(){
         if(!pending_meshes_.empty())
             return pending_meshes_.pop_front();
     }
@@ -207,7 +214,7 @@ private:
     {
         auto self(shared_from_this());
         boost::asio::async_read(socket_,
-                                boost::asio::buffer(read_incoming_mesh_[0], mesh_msg::header_length),
+                                boost::asio::buffer(read_incoming_mesh_[0], mesh_msg::header_length + mesh_msg::type_length),
                                 [this, self](boost::system::error_code ec, std::size_t /*length*/)
                                 {
                                     if (!ec && read_incoming_mesh_.decode_header())
@@ -234,7 +241,7 @@ private:
                                         // print recived op
                                         std::cout.write(read_msg_.body(), read_msg_.body_length());
                                         std::cout << "\n";
-                                        // deliver op to all partecipant (exept sender)
+                                        // deliver op to all partecipant (except sender)
                                         room_.deliver(read_msg_, shared_from_this());
                                         do_read_header();
                                     }
@@ -249,14 +256,24 @@ private:
     {
         auto self(shared_from_this());
         boost::asio::async_read(socket_,
-                                boost::asio::buffer(read_incoming_mesh_[mesh_msg::header_length], read_incoming_mesh_.body_length()),
+                                boost::asio::buffer(read_incoming_mesh_[mesh_msg::header_length + mesh_msg::type_length], read_incoming_mesh_.body_length()),
                                 [this, self](boost::system::error_code ec, std::size_t /*length*/)
                                 {
                                     if (!ec)
                                     {
                                         // print recived op
-                                        std::cout << "mesh recived\n";
-                                        // deliver op to all partecipant (exept sender)
+                                        switch (read_incoming_mesh_.type()) {
+                                            case 1: // Mesh
+                                                message("mesh recived\n");
+                                                break;
+                                            case 2: // SubMesh
+                                                message("submesh recived\n");
+                                                break;
+
+                                            default:
+                                                break;
+                                        }
+                                        // deliver mesh to all partecipant (except sender)
                                         room_.deliver_mesh(read_incoming_mesh_,shared_from_this());
                                         do_read_mesh_header();
                                     }
@@ -348,6 +365,11 @@ public:
         return room_.remove_first_op();
     }
     
+    void remove_first(){
+        return room_.remove_first();
+    }
+
+    
     bool has_pending_mesh(){
         return room_.has_pending_mesh();
     }
@@ -355,6 +377,11 @@ public:
     Mesh* get_next_mesh(){
         return room_.get_next_mesh();
     }
+    
+    mesh_msg* get_next_pending(){
+        return room_.get_next_pending();
+    }
+
     
     void remove_first_mesh(){
         return room_.remove_first_mesh();
@@ -386,3 +413,6 @@ private:
     tcp::socket socket_;
     chat_room room_;
 };
+
+#endif
+

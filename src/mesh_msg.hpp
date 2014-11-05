@@ -1,17 +1,5 @@
-//
-//  mesh_msg.hpp
-//  tgl
-//
-//  Created by Gabriele Palozzi on 22/10/14.
-//  Copyright (c) 2014 Sapienza. All rights reserved.
-//
-
 #ifndef tgl_mesh_msg_hpp
 #define tgl_mesh_msg_hpp
-//
-// op_message.h
-// ~~~~~~~~~~~~~~~~
-//
 
 #include <cstdio>
 #include <cstdlib>
@@ -23,7 +11,9 @@ class mesh_msg
 {
 public:
     enum { header_length = 8 };
+    enum { type_length = 3 };
     enum { max_body_length = 512 };
+    enum { Mesh_type = 1, SubMesh_type = 2, Operation_type = 3 };
     
     mesh_msg()
     : body_length_(0)
@@ -37,44 +27,143 @@ public:
         boost::archive::text_oarchive archive(archive_stream);
         archive << *mesh;
         
+        // Set message body length
         body_length_ = archive_stream.str().size();
         
+        // create header
         std::ostringstream header_stream;
         header_stream << std::setw(header_length) << std::hex << body_length_;
         
+        // set message type on stream
+        std::ostringstream type_stream;
+        type_stream << std::setw(type_length) << std::hex << Mesh_type;
+
         if(!header_stream || header_stream.str().size() != header_length){
             message("Header size > max header length for mesh (id: %llu)", mesh->_id_);
             body_length_ = 0;
         }
+        else if (!type_stream || type_stream.str().size() != type_length){
+            message("type size > max type length for mesh (id: %llu)", mesh->_id_);
+            body_length_ = 0;
+        }
         else{
-            mesh_msg_data_.resize(body_length_ + header_length);
+            mesh_msg_data_.resize(body_length_ + type_length + header_length);
             
-            //copy header & mesh data
+            //copy header, type & mesh data
             std::memcpy(&mesh_msg_data_[0], header_stream.str().c_str(), header_length);
-            std::memcpy(&mesh_msg_data_[header_length], archive_stream.str().c_str(), body_length_);
+            std::memcpy(&mesh_msg_data_[header_length], type_stream.str().c_str(), type_length);
+            std::memcpy(&mesh_msg_data_[header_length + type_length], archive_stream.str().c_str(), body_length_);
+            
+            // set message type on this
+            message_type = Mesh_type;
         }
     }
     
+    mesh_msg(const SubMesh* submesh )
+    {
+        // Serialize the mesh.
+        std::ostringstream archive_stream;
+        boost::archive::text_oarchive archive(archive_stream);
+        archive << *submesh;
+        
+        // Set message body length
+        body_length_ = archive_stream.str().size();
+        
+        // create header
+        std::ostringstream header_stream;
+        header_stream << std::setw(header_length) << std::hex << body_length_;
+        
+        // set message type
+        std::ostringstream type_stream;
+        type_stream << std::setw(type_length) << std::hex << SubMesh_type;
+        
+        if(!header_stream || header_stream.str().size() != header_length){
+            message("Header size > max header length for submesh (id: %llu)", submesh->_id_);
+            body_length_ = 0;
+        }
+        else if (!type_stream || type_stream.str().size() != type_length){
+            message("type size > max type length for submesh (id: %llu)", submesh->_id_);
+            body_length_ = 0;
+        }
+        else{
+            // resize
+            mesh_msg_data_.resize(body_length_ + type_length + header_length);
+            
+            //copy header, type & mesh data
+            std::memcpy(&mesh_msg_data_[0], header_stream.str().c_str(), header_length);
+            std::memcpy(&mesh_msg_data_[header_length], type_stream.str().c_str(), type_length);
+            std::memcpy(&mesh_msg_data_[header_length + type_length], archive_stream.str().c_str(), body_length_);
+            
+            // set message type on this
+            message_type = SubMesh_type;
+        }
+    }
+
     // get vector mesh position
     char* operator[](int i) { if (i < mesh_msg_data_.size()-1) return &mesh_msg_data_[i]; else message("Access to member out of bound"); return nullptr; }
     
-    // get all mesh
-    const void mesh(Mesh &mesh) const
+    // get as mesh
+    Mesh* as_mesh() const
     {
-        std::string archive_data(&mesh_msg_data_[header_length], body_length_);
+        auto mesh = new Mesh();
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
+        std::istringstream archive_stream(archive_data);
+        boost::archive::text_iarchive archive(archive_stream);
+        archive >> *mesh;
+        
+        return mesh;
+    }
+    
+     Mesh* as_mesh()
+    {
+        auto mesh = new Mesh();
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
+        std::istringstream archive_stream(archive_data);
+        boost::archive::text_iarchive archive(archive_stream);
+        archive >> *mesh;
+        
+        return mesh;
+    }
+    
+    // get as mesh
+    void mesh(Mesh& mesh) const
+    {
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
         std::istringstream archive_stream(archive_data);
         boost::archive::text_iarchive archive(archive_stream);
         archive >> mesh;
     }
     
-     void mesh(Mesh &mesh)
+    void as_mesh(Mesh& mesh)
     {
-        std::string archive_data(&mesh_msg_data_[header_length], body_length_);
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
         std::istringstream archive_stream(archive_data);
         boost::archive::text_iarchive archive(archive_stream);
         archive >> mesh;
     }
 
+    // get as submesh
+    SubMesh* as_submesh() const
+    {
+        auto submesh = new SubMesh();
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
+        std::istringstream archive_stream(archive_data);
+        boost::archive::text_iarchive archive(archive_stream);
+        archive >> *submesh;
+        
+        return submesh;
+    }
+    
+    SubMesh* as_submesh()
+    {
+        auto submesh = new SubMesh();
+        std::string archive_data(&mesh_msg_data_[header_length + type_length], body_length_);
+        std::istringstream archive_stream(archive_data);
+        boost::archive::text_iarchive archive(archive_stream);
+        archive >> *submesh;
+        
+        return submesh;
+    }
     
     // get all data
     const char* data() const
@@ -90,9 +179,15 @@ public:
     // get message length
     std::size_t length() const
     {
-        return header_length + body_length_;
+        return header_length + type_length + body_length_;
     }
     
+    // get message length
+    int type() const
+    {
+        return message_type;
+    }
+
     // get body only
     const char* body() const
     {
@@ -122,8 +217,10 @@ public:
     bool decode_header()
     {
         std::istringstream is(std::string(&mesh_msg_data_[0], header_length));
+        std::istringstream is2(std::string(&mesh_msg_data_[header_length], type_length));
         if (!(is >> std::hex >> body_length_)) return false;
-        mesh_msg_data_.resize(body_length_ + header_length);
+        if (!(is2 >> std::hex >> message_type)) return false;
+        mesh_msg_data_.resize(header_length + type_length +  body_length_);
         return true;
     }
     
@@ -136,7 +233,8 @@ public:
     }
     
 private:
-    std::vector<char> mesh_msg_data_ = std::vector<char>(header_length);
+    std::vector<char> mesh_msg_data_ = std::vector<char>(header_length + type_length);
+    int message_type = -1;
     char data_[header_length + max_body_length];
     std::size_t body_length_;    
 };

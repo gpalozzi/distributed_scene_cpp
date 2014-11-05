@@ -1,6 +1,11 @@
 #ifndef _SERIALIZATION_HPP_
 #define _SERIALIZATION_HPP_
 
+#include "scene_distributed.h"
+#include <boost/serialization/vector.hpp>
+#include <boost/serialization/map.hpp>
+
+
 namespace boost {
     namespace serialization {
         
@@ -124,19 +129,14 @@ namespace boost {
         {
             ar & m.frame;
             ar & m.mat;
-            ar & m.vertex_ids;
             ar & m.pos;
             ar & m.normal_ids;
             ar & m.norm;
-            ar & m.texcoord_ids;
             ar & m.texcoord;
-            ar & m.triangle_ids;
             ar & m.triangle;
             ar & m.triangle_index;
-            ar & m.quad_ids;
             ar & m.quad;
             ar & m.quad_index;
-            ar & m.edge_ids;
             ar & m.edge;
             ar & m.edge_index;
             ar & m.point;
@@ -144,6 +144,7 @@ namespace boost {
             ar & m.spline;
             ar & m.vertex_id_map;
             ar & m._id_;
+            ar & m._version;
         }
         
         // scene serialization
@@ -161,8 +162,25 @@ namespace boost {
             ar & s.image_height;
             ar & s.image_samples;
             ar & s.ids_map;
-
         }
+        
+        // submesh serialization
+        template<class Archive>
+        void serialize(Archive & ar, SubMesh& sm, const unsigned int version)
+        {
+            ar & sm.remove_vertex;
+            ar & sm.remove_edge;
+            ar & sm.remove_triangle;
+            ar & sm.remove_quad;
+            ar & sm.add_vertex;
+            ar & sm.add_edge;
+            ar & sm.add_triangle;
+            ar & sm.add_quad;
+            ar & sm.update_vertex;
+            ar & sm._id_;
+            ar & sm._version;
+        }
+
         
     } // namespace serialization
 } // namespace boost

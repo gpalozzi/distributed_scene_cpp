@@ -31,9 +31,28 @@
 		B60CD78B1A010C67009046F5 /* libglfw3.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B60CD76A1A01028F009046F5 /* libglfw3.a */; };
 		B60CD78C1A010C6E009046F5 /* libboost_system.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B60CD7421A00F5EE009046F5 /* libboost_system.a */; };
 		B60CD78D1A010C72009046F5 /* libboost_serialization.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B60CD73E1A00F5EE009046F5 /* libboost_serialization.a */; };
+		B6324B5B1A0A459500F63DE6 /* mesh_parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B6324B591A0A459500F63DE6 /* mesh_parser.cpp */; };
+		B6324B5D1A0A45A500F63DE6 /* crop_mesh.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B6324B5C1A0A45A500F63DE6 /* crop_mesh.cpp */; };
+		B6324B5F1A0A45C500F63DE6 /* mesh_diff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B6324B5E1A0A45C500F63DE6 /* mesh_diff.cpp */; };
+		B6D836041A069EBA00C392B6 /* test.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B6D836031A069EBA00C392B6 /* test.cpp */; };
+		B6D836141A06A06600C392B6 /* scene_distributed.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B60CD6FE1A00F19E009046F5 /* scene_distributed.cpp */; };
+		B6D836151A06A65300C392B6 /* image.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B60CD6FB1A00F19E009046F5 /* image.cpp */; };
+		B6D836161A06A67000C392B6 /* json.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B60CD6FC1A00F19E009046F5 /* json.cpp */; };
+		B6D836171A06A68700C392B6 /* lodepng.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B60CD7581A00F684009046F5 /* lodepng.cpp */; };
+		B6D836181A06A7E200C392B6 /* libboost_system.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B60CD7421A00F5EE009046F5 /* libboost_system.a */; };
+		B6D836191A06A7E500C392B6 /* libboost_serialization.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B60CD73E1A00F5EE009046F5 /* libboost_serialization.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		B603F6131A02B892005D10BE /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		B60CD7081A00F425009046F5 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -52,15 +71,48 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
+		B6D4B4F51A03B5BB00494A3A /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		B6D836081A069F3200C392B6 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		B6FB18B01A09530B0053E69D /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		B603F6001A024975005D10BE /* cube_red.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_red.json; path = scenes/cube_red.json; sourceTree = "<group>"; };
 		B603F6011A024983005D10BE /* cube_green.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_green.json; path = scenes/cube_green.json; sourceTree = "<group>"; };
+		B603F6021A029F97005D10BE /* shuttle0.2ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.2ply.json; path = scenes/shuttle0.2ply.json; sourceTree = "<group>"; };
+		B603F6031A029F97005D10BE /* shuttle0.3ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.3ply.json; path = scenes/shuttle0.3ply.json; sourceTree = "<group>"; };
+		B603F6041A029F97005D10BE /* shuttle0.4ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.4ply.json; path = scenes/shuttle0.4ply.json; sourceTree = "<group>"; };
+		B603F6051A02A39C005D10BE /* common.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = common.h; path = src/common.h; sourceTree = "<group>"; };
+		B603F6061A02A3B6005D10BE /* lodepng.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = lodepng.h; path = src/lodepng.h; sourceTree = "<group>"; };
+		B603F6071A02A3C2005D10BE /* message.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = message.h; path = src/message.h; sourceTree = "<group>"; };
+		B603F6151A02B892005D10BE /* crop_mesh */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = crop_mesh; sourceTree = BUILT_PRODUCTS_DIR; };
 		B60CD6EE1A00F19E009046F5 /* id_reference.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = id_reference.h; path = src/id_reference.h; sourceTree = "<group>"; };
 		B60CD6EF1A00F19E009046F5 /* image.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = image.h; path = src/image.h; sourceTree = "<group>"; };
 		B60CD6F01A00F19E009046F5 /* json.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = json.h; path = src/json.h; sourceTree = "<group>"; };
-		B60CD6F11A00F19E009046F5 /* mesh_parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = mesh_parser.h; path = src/mesh_parser.h; sourceTree = "<group>"; };
 		B60CD6F21A00F19E009046F5 /* picojson.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = picojson.h; path = src/picojson.h; sourceTree = "<group>"; };
 		B60CD6F31A00F19E009046F5 /* scene_distributed.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = scene_distributed.h; path = src/scene_distributed.h; sourceTree = "<group>"; };
 		B60CD6F41A00F19E009046F5 /* server.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = server.h; path = src/server.h; sourceTree = "<group>"; };
@@ -70,7 +122,6 @@
 		B60CD6F81A00F19E009046F5 /* serialization.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = serialization.hpp; path = src/serialization.hpp; sourceTree = "<group>"; };
 		B60CD6FB1A00F19E009046F5 /* image.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = image.cpp; path = src/image.cpp; sourceTree = "<group>"; };
 		B60CD6FC1A00F19E009046F5 /* json.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = json.cpp; path = src/json.cpp; sourceTree = "<group>"; };
-		B60CD6FD1A00F19E009046F5 /* mesh_parser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = mesh_parser.cpp; path = src/mesh_parser.cpp; sourceTree = "<group>"; };
 		B60CD6FE1A00F19E009046F5 /* scene_distributed.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = scene_distributed.cpp; path = src/scene_distributed.cpp; sourceTree = "<group>"; };
 		B60CD6FF1A00F19E009046F5 /* fragment.glsl */ = {isa = PBXFileReference; lastKnownFileType = text; name = fragment.glsl; path = src/fragment.glsl; sourceTree = "<group>"; };
 		B60CD7001A00F19E009046F5 /* vertex.glsl */ = {isa = PBXFileReference; lastKnownFileType = text; name = vertex.glsl; path = src/vertex.glsl; sourceTree = "<group>"; };
@@ -149,9 +200,26 @@
 		B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.1ply.json; path = scenes/shuttle0.1ply.json; sourceTree = "<group>"; };
 		B60CD7B31A01113E009046F5 /* shuttle0.ply.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = shuttle0.ply.json; path = scenes/shuttle0.ply.json; sourceTree = "<group>"; };
 		B60CD7B51A01561D009046F5 /* cube_blue.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_blue.json; path = scenes/cube_blue.json; sourceTree = "<group>"; };
+		B6324B591A0A459500F63DE6 /* mesh_parser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = mesh_parser.cpp; path = tools/parse_scene_src/mesh_parser.cpp; sourceTree = "<group>"; };
+		B6324B5A1A0A459500F63DE6 /* mesh_parser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = mesh_parser.h; path = tools/parse_scene_src/mesh_parser.h; sourceTree = "<group>"; };
+		B6324B5C1A0A45A500F63DE6 /* crop_mesh.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = crop_mesh.cpp; path = tools/crop_scene_src/crop_mesh.cpp; sourceTree = "<group>"; };
+		B6324B5E1A0A45C500F63DE6 /* mesh_diff.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = mesh_diff.cpp; path = tools/mesh_diff_src/mesh_diff.cpp; sourceTree = "<group>"; };
+		B6D4B4F11A0390DE00494A3A /* notes */ = {isa = PBXFileReference; lastKnownFileType = text; name = notes; path = doc/notes; sourceTree = "<group>"; };
+		B6D4B4F71A03B5BB00494A3A /* tester */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = tester; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6D4B4FE1A03C1B700494A3A /* cube_red_diff.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = cube_red_diff.json; path = scenes/cube_red_diff.json; sourceTree = "<group>"; };
+		B6D836031A069EBA00C392B6 /* test.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = test.cpp; path = test/test.cpp; sourceTree = "<group>"; };
+		B6D8360A1A069F3200C392B6 /* mesh_diff */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = mesh_diff; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6FB18B21A09530B0053E69D /* mesh_parser */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = mesh_parser; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B603F6121A02B892005D10BE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B60CD7071A00F425009046F5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -180,16 +248,69 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B6D4B4F41A03B5BB00494A3A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6D836071A069F3200C392B6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6D836191A06A7E500C392B6 /* libboost_serialization.a in Frameworks */,
+				B6D836181A06A7E200C392B6 /* libboost_system.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6FB18AF1A09530B0053E69D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B603F60C1A02B608005D10BE /* tools */ = {
+			isa = PBXGroup;
+			children = (
+				B6D836111A069F4600C392B6 /* mesh_diff */,
+				B603F6101A02B678005D10BE /* mesh_parser */,
+				B603F60D1A02B611005D10BE /* crop_scene_file */,
+			);
+			name = tools;
+			sourceTree = "<group>";
+		};
+		B603F60D1A02B611005D10BE /* crop_scene_file */ = {
+			isa = PBXGroup;
+			children = (
+				B6324B5C1A0A45A500F63DE6 /* crop_mesh.cpp */,
+			);
+			name = crop_scene_file;
+			sourceTree = "<group>";
+		};
+		B603F6101A02B678005D10BE /* mesh_parser */ = {
+			isa = PBXGroup;
+			children = (
+				B6324B591A0A459500F63DE6 /* mesh_parser.cpp */,
+				B6324B5A1A0A459500F63DE6 /* mesh_parser.h */,
+			);
+			name = mesh_parser;
+			sourceTree = "<group>";
+		};
 		B60CD6DB1A00EA8D009046F5 = {
 			isa = PBXGroup;
 			children = (
+				B6D4B4F11A0390DE00494A3A /* notes */,
+				B60CD74E1A00F5F5009046F5 /* Libraries */,
+				B60CD6E51A00EA8D009046F5 /* Products */,
 				B60CD7B41A011146009046F5 /* scenes */,
 				B60CD7011A00F1AB009046F5 /* src */,
-				B60CD6E51A00EA8D009046F5 /* Products */,
-				B60CD74E1A00F5F5009046F5 /* Libraries */,
+				B6D836051A069EBC00C392B6 /* test */,
+				B603F60C1A02B608005D10BE /* tools */,
 			);
 			sourceTree = "<group>";
 		};
@@ -198,6 +319,10 @@
 			children = (
 				B60CD70A1A00F425009046F5 /* server */,
 				B60CD77B1A010BFA009046F5 /* client */,
+				B603F6151A02B892005D10BE /* crop_mesh */,
+				B6D4B4F71A03B5BB00494A3A /* tester */,
+				B6D8360A1A069F3200C392B6 /* mesh_diff */,
+				B6FB18B21A09530B0053E69D /* mesh_parser */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -205,14 +330,13 @@
 		B60CD7011A00F1AB009046F5 /* src */ = {
 			isa = PBXGroup;
 			children = (
-				B60CD7031A00F1DE009046F5 /* headers */,
-				B60CD7041A00F233009046F5 /* server_monitor.cpp */,
-				B60CD6FB1A00F19E009046F5 /* image.cpp */,
 				B60CD7051A00F250009046F5 /* client_editor.cpp */,
-				B60CD7581A00F684009046F5 /* lodepng.cpp */,
+				B60CD6FB1A00F19E009046F5 /* image.cpp */,
 				B60CD6FC1A00F19E009046F5 /* json.cpp */,
-				B60CD6FD1A00F19E009046F5 /* mesh_parser.cpp */,
+				B60CD7581A00F684009046F5 /* lodepng.cpp */,
 				B60CD6FE1A00F19E009046F5 /* scene_distributed.cpp */,
+				B60CD7041A00F233009046F5 /* server_monitor.cpp */,
+				B60CD7031A00F1DE009046F5 /* headers */,
 				B60CD7021A00F1B5009046F5 /* shader */,
 			);
 			name = src;
@@ -230,17 +354,19 @@
 		B60CD7031A00F1DE009046F5 /* headers */ = {
 			isa = PBXGroup;
 			children = (
+				B60CD6F61A00F19E009046F5 /* client.hpp */,
+				B603F6051A02A39C005D10BE /* common.h */,
 				B60CD6EE1A00F19E009046F5 /* id_reference.h */,
 				B60CD6EF1A00F19E009046F5 /* image.h */,
 				B60CD6F01A00F19E009046F5 /* json.h */,
-				B60CD6F11A00F19E009046F5 /* mesh_parser.h */,
+				B603F6061A02A3B6005D10BE /* lodepng.h */,
+				B60CD6F71A00F19E009046F5 /* mesh_msg.hpp */,
+				B603F6071A02A3C2005D10BE /* message.h */,
 				B60CD6F21A00F19E009046F5 /* picojson.h */,
 				B60CD6F31A00F19E009046F5 /* scene_distributed.h */,
+				B60CD6F81A00F19E009046F5 /* serialization.hpp */,
 				B60CD6F41A00F19E009046F5 /* server.h */,
 				B60CD6F51A00F19E009046F5 /* vmath.h */,
-				B60CD6F61A00F19E009046F5 /* client.hpp */,
-				B60CD6F71A00F19E009046F5 /* mesh_msg.hpp */,
-				B60CD6F81A00F19E009046F5 /* serialization.hpp */,
 			);
 			name = headers;
 			sourceTree = "<group>";
@@ -337,19 +463,56 @@
 		B60CD7B41A011146009046F5 /* scenes */ = {
 			isa = PBXGroup;
 			children = (
-				B603F6001A024975005D10BE /* cube_red.json */,
-				B603F6011A024983005D10BE /* cube_green.json */,
 				B60CD7B51A01561D009046F5 /* cube_blue.json */,
+				B603F6011A024983005D10BE /* cube_green.json */,
+				B603F6001A024975005D10BE /* cube_red.json */,
+				B6D4B4FE1A03C1B700494A3A /* cube_red_diff.json */,
+				B60CD7B31A01113E009046F5 /* shuttle0.ply.json */,
 				B60CD7B11A01113E009046F5 /* shuttle0.0ply.json */,
 				B60CD7B21A01113E009046F5 /* shuttle0.1ply.json */,
-				B60CD7B31A01113E009046F5 /* shuttle0.ply.json */,
+				B603F6021A029F97005D10BE /* shuttle0.2ply.json */,
+				B603F6031A029F97005D10BE /* shuttle0.3ply.json */,
+				B603F6041A029F97005D10BE /* shuttle0.4ply.json */,
 			);
 			name = scenes;
+			sourceTree = "<group>";
+		};
+		B6D836051A069EBC00C392B6 /* test */ = {
+			isa = PBXGroup;
+			children = (
+				B6D836031A069EBA00C392B6 /* test.cpp */,
+			);
+			name = test;
+			sourceTree = "<group>";
+		};
+		B6D836111A069F4600C392B6 /* mesh_diff */ = {
+			isa = PBXGroup;
+			children = (
+				B6324B5E1A0A45C500F63DE6 /* mesh_diff.cpp */,
+			);
+			name = mesh_diff;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B603F6141A02B892005D10BE /* crop_mesh */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B603F6191A02B892005D10BE /* Build configuration list for PBXNativeTarget "crop_mesh" */;
+			buildPhases = (
+				B603F6111A02B892005D10BE /* Sources */,
+				B603F6121A02B892005D10BE /* Frameworks */,
+				B603F6131A02B892005D10BE /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = crop_mesh;
+			productName = crop_mesh;
+			productReference = B603F6151A02B892005D10BE /* crop_mesh */;
+			productType = "com.apple.product-type.tool";
+		};
 		B60CD7091A00F425009046F5 /* server */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B60CD70E1A00F425009046F5 /* Build configuration list for PBXNativeTarget "server" */;
@@ -384,6 +547,57 @@
 			productReference = B60CD77B1A010BFA009046F5 /* client */;
 			productType = "com.apple.product-type.tool";
 		};
+		B6D4B4F61A03B5BB00494A3A /* tester */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6D4B4FB1A03B5BB00494A3A /* Build configuration list for PBXNativeTarget "tester" */;
+			buildPhases = (
+				B6D4B4F31A03B5BB00494A3A /* Sources */,
+				B6D4B4F41A03B5BB00494A3A /* Frameworks */,
+				B6D4B4F51A03B5BB00494A3A /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = tester;
+			productName = tester;
+			productReference = B6D4B4F71A03B5BB00494A3A /* tester */;
+			productType = "com.apple.product-type.tool";
+		};
+		B6D836091A069F3200C392B6 /* mesh_diff */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6D8360E1A069F3200C392B6 /* Build configuration list for PBXNativeTarget "mesh_diff" */;
+			buildPhases = (
+				B6D836061A069F3200C392B6 /* Sources */,
+				B6D836071A069F3200C392B6 /* Frameworks */,
+				B6D836081A069F3200C392B6 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = mesh_diff;
+			productName = mesh_diff;
+			productReference = B6D8360A1A069F3200C392B6 /* mesh_diff */;
+			productType = "com.apple.product-type.tool";
+		};
+		B6FB18B11A09530B0053E69D /* mesh_parser */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6FB18B81A09530B0053E69D /* Build configuration list for PBXNativeTarget "mesh_parser" */;
+			buildPhases = (
+				B6FB18AE1A09530B0053E69D /* Sources */,
+				B6FB18AF1A09530B0053E69D /* Frameworks */,
+				B6FB18B01A09530B0053E69D /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = mesh_parser;
+			productName = mesh_parser;
+			productReference = B6FB18B21A09530B0053E69D /* mesh_parser */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -393,10 +607,22 @@
 				LastUpgradeCheck = 0610;
 				ORGANIZATIONNAME = "Gabriele Palozzi";
 				TargetAttributes = {
+					B603F6141A02B892005D10BE = {
+						CreatedOnToolsVersion = 6.1;
+					};
 					B60CD7091A00F425009046F5 = {
 						CreatedOnToolsVersion = 6.1;
 					};
 					B60CD77A1A010BFA009046F5 = {
+						CreatedOnToolsVersion = 6.1;
+					};
+					B6D4B4F61A03B5BB00494A3A = {
+						CreatedOnToolsVersion = 6.1;
+					};
+					B6D836091A069F3200C392B6 = {
+						CreatedOnToolsVersion = 6.1;
+					};
+					B6FB18B11A09530B0053E69D = {
 						CreatedOnToolsVersion = 6.1;
 					};
 				};
@@ -415,11 +641,23 @@
 			targets = (
 				B60CD7091A00F425009046F5 /* server */,
 				B60CD77A1A010BFA009046F5 /* client */,
+				B603F6141A02B892005D10BE /* crop_mesh */,
+				B6D4B4F61A03B5BB00494A3A /* tester */,
+				B6D836091A069F3200C392B6 /* mesh_diff */,
+				B6FB18B11A09530B0053E69D /* mesh_parser */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B603F6111A02B892005D10BE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6324B5D1A0A45A500F63DE6 /* crop_mesh.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B60CD7061A00F425009046F5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -444,9 +682,71 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B6D4B4F31A03B5BB00494A3A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6D836041A069EBA00C392B6 /* test.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6D836061A069F3200C392B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6D836171A06A68700C392B6 /* lodepng.cpp in Sources */,
+				B6D836151A06A65300C392B6 /* image.cpp in Sources */,
+				B6D836161A06A67000C392B6 /* json.cpp in Sources */,
+				B6D836141A06A06600C392B6 /* scene_distributed.cpp in Sources */,
+				B6324B5F1A0A45C500F63DE6 /* mesh_diff.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6FB18AE1A09530B0053E69D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6324B5B1A0A459500F63DE6 /* mesh_parser.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		B603F61A1A02B892005D10BE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Debug;
+		};
+		B603F61B1A02B892005D10BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Release;
+		};
 		B60CD6E91A00EA8D009046F5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -597,15 +897,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ENABLE_MODULES = YES;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
+				CLANG_ENABLE_MODULES = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = NO;
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ext/osx/lib/GLFW",
@@ -620,11 +917,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ENABLE_MODULES = YES;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
+				CLANG_ENABLE_MODULES = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = NO;
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ext/osx/lib/GLFW",
@@ -635,9 +932,126 @@
 			};
 			name = Release;
 		};
+		B6D4B4FC1A03B5BB00494A3A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		B6D4B4FD1A03B5BB00494A3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		B6D8360F1A069F3200C392B6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ext/osx/lib/boost",
+				);
+				MTL_ENABLE_DEBUG_INFO = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Debug;
+		};
+		B6D836101A069F3200C392B6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ext/osx/lib/boost",
+				);
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Release;
+		};
+		B6FB18B61A09530B0053E69D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Debug;
+		};
+		B6FB18B71A09530B0053E69D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYMROOT = "$(PROJECT_DIR)/tools";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B603F6191A02B892005D10BE /* Build configuration list for PBXNativeTarget "crop_mesh" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B603F61A1A02B892005D10BE /* Debug */,
+				B603F61B1A02B892005D10BE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B60CD6DF1A00EA8D009046F5 /* Build configuration list for PBXProject "dist_scene" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -661,6 +1075,33 @@
 			buildConfigurations = (
 				B60CD7801A010BFA009046F5 /* Debug */,
 				B60CD7811A010BFA009046F5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6D4B4FB1A03B5BB00494A3A /* Build configuration list for PBXNativeTarget "tester" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6D4B4FC1A03B5BB00494A3A /* Debug */,
+				B6D4B4FD1A03B5BB00494A3A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6D8360E1A069F3200C392B6 /* Build configuration list for PBXNativeTarget "mesh_diff" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6D8360F1A069F3200C392B6 /* Debug */,
+				B6D836101A069F3200C392B6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6FB18B81A09530B0053E69D /* Build configuration list for PBXNativeTarget "mesh_parser" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6FB18B61A09530B0053E69D /* Debug */,
+				B6FB18B71A09530B0053E69D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

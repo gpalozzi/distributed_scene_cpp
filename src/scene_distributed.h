@@ -31,7 +31,10 @@ struct Material {
     
     timestamp_t         _id_ = 0;                      // unique id
     
+    // constructor
     Material() {}
+    
+    // copy constructor
     Material(const Material& mat){
         ke = mat.ke;
         kd = mat.kd;
@@ -41,8 +44,8 @@ struct Material {
         _id_ = mat._id_;
     }
     
-    Material& operator=(const Material& mat)
-    {
+    // assignment operator
+    Material& operator=(const Material& mat){
         ke = mat.ke;
         kd = mat.kd;
         ks = mat.ks;
@@ -104,26 +107,32 @@ struct MeshCollision {
 // a list of indices for triangle and quad faces, material and frame
 struct Mesh {
     frame3f         frame = identity_frame3f;   // frame
-    vector<timestamp_t> vertex_ids;             // vertex ids
+    //vector<timestamp_t> vertex_ids;             // vertex ids
+    map<timestamp_t,int> vertex_id_map;
     vector<vec3f>   pos;                        // vertex position
+    
     vector<timestamp_t> normal_ids;             // vertex normal ids
     vector<vec3f>   norm;                       // vertex normal
-    vector<timestamp_t> texcoord_ids;           // vertex texture coordinates ids
+    
+    //vector<timestamp_t> texcoord_ids;           // vertex texture coordinates ids
     vector<vec2f>   texcoord;                   // vertex texcture coordinates
-    vector<timestamp_t> triangle_ids;           // triangle faces ids
-    vector<vec3id>   triangle;                  // triangle
+    
+    //vector<timestamp_t> triangle_ids;           // triangle faces ids
+    map<timestamp_t,vec3id>   triangle;                  // triangle
     vector<vec3i>   triangle_index;             // triangle index
-    vector<timestamp_t> quad_ids;               // quad faces ids
-    vector<vec4id>   quad;                      // quad
+    
+    //vector<timestamp_t> quad_ids;               // quad faces ids
+    map<timestamp_t,vec4id>   quad;                      // quad
     vector<vec4i>   quad_index;                 // quad index
-    vector<timestamp_t> edge_ids;               // edges ids
-    vector<vec2id>   edge;                      // edges
+    
+    //vector<timestamp_t> edge_ids;               // edges ids
+    map<timestamp_t,vec2id>   edge;                      // edges
     vector<vec2i>   edge_index;                 // edges index
+    
     vector<int>     point;                      // point
     vector<vec2i>   line;                       // line
     vector<vec4i>   spline;                     // cubic bezier segments
     
-    map<timestamp_t,int> vertex_id_map;
     
     Material*       mat = new Material();       // material
     
@@ -139,28 +148,31 @@ struct Mesh {
     BVHAccelerator* bvh = nullptr;              // bvh accelerator for intersection
     
     timestamp_t         _id_ = 0;                      // unique id
-    
+    int                 _version = -1;      // mesh version for shuttle
+    // constructor
     Mesh() {}
-    Mesh(const Mesh& mesh)
-    {
+    
+    // copy constructor
+    Mesh(const Mesh& mesh){
         frame = mesh.frame;
-        vertex_ids = mesh.vertex_ids;
+        //vertex_ids = mesh.vertex_ids;
         pos = mesh.pos;
         normal_ids = mesh.normal_ids;
         norm = mesh.norm;
-        texcoord_ids = mesh.texcoord_ids;
+        //texcoord_ids = mesh.texcoord_ids;
         texcoord = mesh.texcoord;
-        triangle_ids = mesh.triangle_ids;
+        //triangle_ids = mesh.triangle_ids;
         triangle = mesh.triangle;
         triangle_index = mesh.triangle_index;
-        quad_ids = mesh.quad_ids;
+        //quad_ids = mesh.quad_ids;
         quad = mesh.quad;
         quad_index = mesh.quad_index;
-        edge_ids = mesh.edge_ids;
+        //edge_ids = mesh.edge_ids;
         edge = mesh.edge;
         edge_index = mesh.edge_index;
         vertex_id_map = mesh.vertex_id_map;
         _id_ = mesh._id_;
+        _version = mesh._version;
         
         mat = new Material();
         *mat = *mesh.mat;
@@ -251,6 +263,132 @@ struct Scene {
 
 };
 
+struct SubMesh {
+    // remove element
+    vector<timestamp_t> remove_vertex;
+    vector<timestamp_t> remove_edge;
+    vector<timestamp_t> remove_triangle;
+    vector<timestamp_t> remove_quad;
+    // add element
+    map<timestamp_t, vec3f> add_vertex;
+    map<timestamp_t, vec2id> add_edge;
+    map<timestamp_t, vec3id> add_triangle;
+    map<timestamp_t, vec4id> add_quad;
+    // update element
+    map<timestamp_t, vec3f> update_vertex;
+    
+    timestamp_t             _id_ = 0;
+    int                     _version = -1;
+    
+    // constructor
+    SubMesh() {}
+    
+    SubMesh(const Mesh* first_mesh,const Mesh* second_mesh){
+        //check vertex difference
+        //  removed vertex
+        map<timestamp_t,int> diffVertex;
+        set_difference(first_mesh->vertex_id_map.begin(), first_mesh->vertex_id_map.end(),
+                       second_mesh->vertex_id_map.begin(), second_mesh->vertex_id_map.end(),
+                       insert_iterator<map<timestamp_t,int>>(diffVertex, diffVertex.end()),
+                       [](const map<timestamp_t,int>::value_type  & a, const map<timestamp_t,int>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        for( auto it = diffVertex.begin(); it != diffVertex.end(); it++)
+            remove_vertex.push_back(it->first);
+        
+        //  added vertex & pos
+        diffVertex.clear();
+        set_difference(second_mesh->vertex_id_map.begin(), second_mesh->vertex_id_map.end(),
+                       first_mesh->vertex_id_map.begin(), first_mesh->vertex_id_map.end(),
+                       insert_iterator<map<timestamp_t,int>>(diffVertex, diffVertex.end()),
+                       [](const map<timestamp_t,int>::value_type  & a, const map<timestamp_t,int>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        for( auto it = diffVertex.begin(); it != diffVertex.end(); it++)
+            add_vertex.emplace(it->first, second_mesh->pos[it->second]);
+        
+        // vertex pos update
+        diffVertex.clear();
+        set_intersection(second_mesh->vertex_id_map.begin(), second_mesh->vertex_id_map.end(),
+                         first_mesh->vertex_id_map.begin(), first_mesh->vertex_id_map.end(),
+                         insert_iterator<map<timestamp_t,int>>(diffVertex, diffVertex.end()),
+                         [=](const map<timestamp_t,int>::value_type  & a, const map<timestamp_t,int>::value_type & b)
+                         {   if (a.first == b.first && second_mesh->pos[a.second] == first_mesh->pos[b.second]) return true; return a.first < b.first; }
+                         );
+        for( auto it = diffVertex.begin(); it != diffVertex.end(); it++)
+            update_vertex.emplace(it->first, second_mesh->pos[it->second]);
+        
+        //check edges difference
+        //  removed edges
+        diffVertex.clear();
+        map<timestamp_t,vec2id> diffEdges;
+        set_difference(first_mesh->edge.begin(), first_mesh->edge.end(),
+                       second_mesh->edge.begin(), second_mesh->edge.end(),
+                       insert_iterator<map<timestamp_t,vec2id>>(diffEdges, diffEdges.end()),
+                       [](const map<timestamp_t,vec2id>::value_type  & a, const map<timestamp_t,vec2id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        for( auto it = diffEdges.begin(); it != diffEdges.end(); it++)
+            remove_edge.push_back(it->first);
+        diffEdges.clear();
+        
+        //  added edges & vert id
+        set_difference(second_mesh->edge.begin(), second_mesh->edge.end(),
+                       first_mesh->edge.begin(), first_mesh->edge.end(),
+                       insert_iterator<map<timestamp_t,vec2id>>(add_edge, add_edge.end()),
+                       [](const map<timestamp_t,vec2id>::value_type  & a, const map<timestamp_t,vec2id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        
+        //check triangle difference
+        //  removed triangle
+        map<timestamp_t,vec3id> diffTriangle;
+        set_difference(first_mesh->triangle.begin(), first_mesh->triangle.end(),
+                       second_mesh->triangle.begin(), second_mesh->triangle.end(),
+                       insert_iterator<map<timestamp_t,vec3id>>(diffTriangle, diffTriangle.end()),
+                       [](const map<timestamp_t,vec3id>::value_type  & a, const map<timestamp_t,vec3id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        for( auto it = diffTriangle.begin(); it != diffTriangle.end(); it++)
+            remove_triangle.push_back(it->first);
+        diffTriangle.clear();
+        
+        //  added triangle & vert id
+        set_difference(second_mesh->triangle.begin(), second_mesh->triangle.end(),
+                       first_mesh->triangle.begin(), first_mesh->triangle.end(),
+                       insert_iterator<map<timestamp_t,vec3id>>(add_triangle, add_triangle.end()),
+                       [](const map<timestamp_t,vec3id>::value_type  & a, const map<timestamp_t,vec3id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        
+        //check quad difference
+        //  removed quad
+        map<timestamp_t,vec4id> diffQuad;
+        set_difference(first_mesh->quad.begin(), first_mesh->quad.end(),
+                       second_mesh->quad.begin(), second_mesh->quad.end(),
+                       insert_iterator<map<timestamp_t,vec4id>>(diffQuad, diffQuad.end()),
+                       [](const map<timestamp_t,vec4id>::value_type  & a, const map<timestamp_t,vec4id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        for( auto it = diffQuad.begin(); it != diffQuad.end(); it++)
+            remove_quad.push_back(it->first);
+        diffQuad.clear();
+        
+        //  added quad & vert id
+        set_difference(second_mesh->quad.begin(), second_mesh->quad.end(),
+                       first_mesh->quad.begin(), first_mesh->quad.end(),
+                       insert_iterator<map<timestamp_t,vec4id>>(add_quad, add_quad.end()),
+                       [](const map<timestamp_t,vec4id>::value_type  & a, const map<timestamp_t,vec4id>::value_type & b)
+                       { return a.first < b.first; }
+                       );
+        
+        _id_ = second_mesh->_id_;
+        _version = second_mesh->_version;
+    }
+    
+};
+
+
 // grab all scene textures
 vector<image3f*> get_textures(Scene* scene);
 
@@ -262,6 +400,25 @@ void set_view_turntable(Camera* camera, float rotate_phi, float rotate_theta, fl
 
 // load a scene from a json file
 Scene* load_json_scene(const string& filename);
+
+// force indexing of vertex position
+void indexing_vertex_position(Mesh* mesh);
+
+// compute edge&faces indexing and normal value per pixel
+void init_mesh_properties_from_map(Mesh* mesh, bool force_quad_update, bool force_triangle_update, bool force_edges_update, bool force_norm_update);
+
+Mesh* get_mesh_to_restrore();
+
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history);
+
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes_check(Mesh* mesh, Mesh* real_mesh, SubMesh* submesh, bool save_history);
+
+// swap 2 mesh
+void swap_mesh(Mesh* mesh, Scene* scene, bool save_history);
 
 #endif
 

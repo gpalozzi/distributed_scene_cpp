@@ -14,7 +14,6 @@
 #include "scene_distributed.h"
 #include "serialization.hpp"
 #include "image.h"
-#include "tesselation.h"
 #include "id_reference.h"
 #include "server.h"
 #include <boost/asio.hpp>
@@ -47,7 +46,7 @@ int gl_vertex_shader_id = 0;    // OpenGL vertex shader handle
 int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
 
-map<timestamp_t,Mesh*> mesh_history;
+//map<timestamp_t,Mesh*> mesh_history;
 
 // check if an OpenGL error
 void error_if_glerror() {
@@ -265,7 +264,7 @@ void shade(Scene* scene, bool wireframe) {
 			if(mesh->quad.size()) glDrawElements(GL_QUADS, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
 		} else {
 			//auto edges = EdgeMap(mesh->triangle, mesh->quad).edges();
-			//glDrawElements(GL_LINES, edges.size()*2, GL_UNSIGNED_INT, &edges[0].x);
+            if(mesh->edge.size()) glDrawElements(GL_LINES, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
 		}
 		
 		// draw line sets
@@ -291,38 +290,7 @@ bool mesh_ver = false;
 bool mesh_rot = false;
 bool have_msg = false;
 bool restore_old = false;
-
-// swap 2 mesh
-void swap_mesh(Mesh* new_mesh, Mesh* old_mesh, bool save_history){
-    // update mesh pointers for this id
-    auto i = indexof(scene->ids_map[new_mesh->_id_].as_mesh(), scene->meshes);
-    if( i >= 0){
-        if (save_history) {
-            auto clone = new Mesh(*scene->meshes[i]);
-            mesh_history.emplace(get_timestamp(),clone);
-        }
-        scene->meshes[i] = new_mesh;
-        scene->ids_map[new_mesh->_id_]._me = new_mesh;
-        //scene->ids_map[new_mesh->_id_] = *new id_reference(new_mesh,new_mesh->_id_);
-    }
-    else{
-        // add new mesh
-        scene->meshes.push_back(new_mesh);
-        scene->ids_map.emplace(new_mesh->_id_,*new id_reference(new_mesh,new_mesh->_id_));
-    }
-    // update mesh material
-    i = indexof(scene->ids_map[new_mesh->mat->_id_].as_material(), scene->materials);
-    if( i >= 0){
-        scene->materials[i] = new_mesh->mat;
-        scene->ids_map[new_mesh->mat->_id_]._m = new_mesh->mat;
-        //scene->ids_map[new_mesh->mat->_id_] = *new id_reference(new_mesh->mat,new_mesh->mat->_id_);
-    }
-    else{
-        scene->materials.push_back(new_mesh->mat);
-        scene->ids_map.emplace(new_mesh->mat->_id_,*new id_reference(new_mesh->mat,new_mesh->mat->_id_));
-    }
-    
-}
+//bool send_submesh = false;    to implement if needed
 
 // glfw callback for character input
 void character_callback(GLFWwindow* window, unsigned int key) {
@@ -348,7 +316,46 @@ void character_callback(GLFWwindow* window, unsigned int key) {
 		case 'r':
 			restore_old = true;
 			break;
+//        case 'a':
+//            send_submesh = true;
+//            break;
+
 	}
+}
+
+
+void save_mesh(const Mesh &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_mesh(Mesh &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore the schedule from the archive
+    ia >> m;
+}
+
+void save_submesh(const SubMesh &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_submesh(SubMesh &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore the schedule from the archive
+    ia >> m;
 }
 
 // uiloop
@@ -429,8 +436,28 @@ void uiloop(editor_server* server) {
 			server->remove_front_op();
 			mesh_rot = false;
 		}
-		
-		
+//		  to do: implement if needed
+//        if(send_submesh){
+//            message("Mesh versions:\n");
+//            for(auto i : range(6)){
+//                message("version [%d]\n",i);
+//            }
+//            message("Chose version (-1 to exit): ");
+//            auto choice = 1;
+//            std::cin >> choice;
+//            if (choice >= 0 && choice <= 5 && choice != scene->meshes[0]->_version) {
+//                auto diff = new SubMesh();
+//                string filename = "../scenes/diff/m" + to_string(scene->meshes[0]->_version) + "tom" + to_string(choice);
+//                restore_submesh(*diff, filename.c_str());
+//                // apply changes to mesh
+//                apply_changes(scene->meshes[0], diff, true);
+//                // send submesh
+//                server->write(diff);
+//            }
+//            
+//            send_submesh = false;
+//        }
+
 		while(server->has_pending_op()){
 			//prendi la prossima operazione
 			auto msg = server->get_next_pending_op();
@@ -450,53 +477,40 @@ void uiloop(editor_server* server) {
 		}
 		
 		while(server->has_pending_mesh()){
-			// get the next mesh recived
-            auto mesh = server->get_next_mesh();
-            // update mesh pointers for this id
-			auto i = indexof(scene->ids_map[mesh->_id_].as_mesh(), scene->meshes);
-			if( i >= 0){
-                auto clone = new Mesh(*scene->meshes[i]);
-                mesh_history.emplace(get_timestamp(),clone);
-				scene->meshes[i] = mesh;
-                scene->ids_map[mesh->_id_]._me = mesh;
-				//scene->ids_map[mesh->_id_] = *new id_reference(mesh,mesh->_id_);
-			}
-			else{
-                // add new mesh
-				scene->meshes.push_back(mesh);
-				scene->ids_map.emplace(mesh->_id_,*new id_reference(mesh,mesh->_id_));
-			}
-            // update mesh material
-			i = indexof(scene->ids_map[mesh->mat->_id_].as_material(), scene->materials);
-			if( i >= 0){
-				scene->materials[i] = mesh->mat;
-                scene->ids_map[mesh->mat->_id_]._m = mesh->mat;
-				//scene->ids_map[mesh->mat->_id_] = *new id_reference(mesh->mat,mesh->mat->_id_);
-			}
-			else{
-				scene->materials.push_back(mesh->mat);
-				scene->ids_map.emplace(mesh->mat->_id_,*new id_reference(mesh->mat,mesh->mat->_id_));
-			}
-			
-			//rimuovila
-			server->remove_first_mesh();
-		}
+            // get next message
+            auto msg = server->get_next_pending();
+            // switch between message type
+            switch (msg->type()) {
+                case 1: // Mesh
+                {
+                    // get the next mesh recived
+                    auto mesh = msg->as_mesh();
+                    // save mesh in history and update mesh
+                    swap_mesh(mesh, scene, true);
+                    // remove from queue
+                    server->remove_first();
+                }
+                    break;
+                case 2: // SubMesh
+                {
+                    // get the next mesh recived
+                    auto submesh = msg->as_submesh();
+                    // apply differences
+                    apply_changes(scene->meshes[0], submesh, true);
+                    message("actual mesh version: %d\n", scene->meshes[0]->_version);
+                    // remove from queue
+                    server->remove_first();
+                }
+                    break;
+                default:
+                    break;
+            }		}
 		
 		if(restore_old){
-            vector<timestamp_t> choices;
-            int choice = 1;
-            message("mesh history\n");
-            for(auto m : mesh_history){
-                message("[%d] %llu\n",choice++,m.first);
-                choices.push_back(m.first);
+            auto mesh = get_mesh_to_restrore();
+            if (mesh) {
+                swap_mesh(mesh, scene, true);
             }
-            message("Mesh to restore (0 = exit): ");
-            choice = 0;
-            std::cin >> choice;
-            if (choice > 0 ) {
-                swap_mesh(mesh_history[choices[choice-1]],nullptr,true);
-            }
-			restore_old = false;
 		}
 		
 		
@@ -527,34 +541,9 @@ void uiloop(editor_server* server) {
 	glfwTerminate();
 }
 
-void save_mesh(const Mesh &m, const char * filename){
-	// make an archive
-	std::ofstream ofs(filename);
-	boost::archive::text_oarchive oa(ofs);
-	oa << m;
-	
-	vector<char> test;
-	test.resize(16);
-	
-	std::ostringstream header_stream;
-	header_stream << std::setw(8) << std::hex << 1;
-	
-	string strrrr = "ciao";
-	
-	std::memcpy(&test[8], header_stream.str().c_str(), header_stream.str().size());
-	std::istringstream is(std::string(&test[8], 8));
-	std::size_t body_length_ = 0;
-	
-	is >> std::hex >> body_length_;
-}
-
-void restore_mesh(Mesh &m, const char * filename){
-	// open the archive
-	std::ifstream ifs(filename);
-	boost::archive::text_iarchive ia(ifs);
-	
-	// restore the schedule from the archive
-	ia >> m;
+void test_mesh_diff(Scene* scene){
+    auto diff = new SubMesh(scene->meshes[1], scene->meshes[0]);
+    //apply_changes(scene->meshes[1], diff);
 }
 
 // main function
@@ -570,7 +559,7 @@ int main(int argc, char** argv) {
 	args.object_element("image_filename").as_string() :
 	scene_filename.substr(0,scene_filename.size()-5)+".png";
 	// load scene from json
-	scene = load_json_scene(scene_filename);
+    scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
 	if(not args.object_element("resolution").is_null()) {
 		scene->image_height = args.object_element("resolution").as_int();
 		scene->image_width = scene->camera->width * scene->image_height / scene->camera->height;
@@ -579,6 +568,8 @@ int main(int argc, char** argv) {
 	// not needed
 	//subdivide(scene);
 	
+    //test_mesh_diff(scene);
+    
 	// start start
 	
 	try {

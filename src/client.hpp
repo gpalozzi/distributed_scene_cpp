@@ -58,7 +58,7 @@ public:
     }
     
     // send mesh on socket
-    void write_mesh(const Mesh* mesh)
+    void write(const Mesh* mesh)
     {
         io_service_.post(
                          [this, mesh]()
@@ -74,6 +74,30 @@ public:
                              if (!write_in_progress)
                              {
                                  // write on socket
+                                 // need to unify do_write and do_write_mesh function!!!!
+                                 do_write_mesh();
+                             }
+                         });
+    }
+    
+    // send submesh on socket
+    void write(const SubMesh* submesh)
+    {
+        io_service_.post(
+                         [this, submesh]()
+                         {
+                             
+                             // build serialized mesh
+                             // build header
+                             auto m_msg = mesh_msg(submesh);
+                             // check if write in progress
+                             bool write_in_progress = !write_meshes_.empty();
+                             // push into mesh to write
+                             write_meshes_.push_back(m_msg);
+                             if (!write_in_progress)
+                             {
+                                 // write on socket
+                                 // need to unify do_write and do_write_mesh function!!!!
                                  do_write_mesh();
                              }
                          });
@@ -85,13 +109,21 @@ public:
     
     Mesh* get_next_mesh(){
         if(!pending_meshes_.empty()){
-            pending_meshes_.front().mesh(current_mesh);
+            current_mesh = *pending_meshes_.front().as_mesh();
             return &current_mesh;
         }
         return nullptr;
     }
     
-    void remove_first_mesh(){
+    mesh_msg* get_next_pending(){
+        if(!pending_meshes_.empty()){
+            return &pending_meshes_.front();
+
+        }
+        return nullptr;
+    }
+    
+    void remove_first(){
         if(!pending_meshes_.empty())
             return pending_meshes_.pop_front();
     }
@@ -110,6 +142,7 @@ private:
                                        if (!ec)
                                        {
                                            //do_read_header();
+                                           // need to unify do_read_header and do_read_mesh_header function!!!!
                                            do_read_mesh_header();
                                        }
                                    });
@@ -135,7 +168,7 @@ private:
     void do_read_mesh_header()
     {
         boost::asio::async_read(socket_,
-                                boost::asio::buffer(read_incoming_mesh_[0], mesh_msg::header_length),
+                                boost::asio::buffer(read_incoming_mesh_[0], mesh_msg::header_length + mesh_msg::type_length),
                                 [this](boost::system::error_code ec, std::size_t /*length*/)
                                 {
                                     if (!ec && read_incoming_mesh_.decode_header())
@@ -148,6 +181,7 @@ private:
                                     }
                                 });
     }
+    
     
     void do_read_body()
     {
@@ -172,13 +206,13 @@ private:
     void do_read_mesh_body()
     {
         boost::asio::async_read(socket_,
-                                boost::asio::buffer(read_incoming_mesh_[mesh_msg::header_length],
+                                boost::asio::buffer(read_incoming_mesh_[mesh_msg::header_length + mesh_msg::type_length],
                                                     read_incoming_mesh_.body_length()),
                                 [this](boost::system::error_code ec, std::size_t /*length*/)
                                 {
                                     if (!ec)
                                     {
-                                        std::cout << "mesh recived\n";
+                                        std::cout << "message recived\n";
                                         // ack?
                                         pending_meshes_.push_back(read_incoming_mesh_);
                                         do_read_mesh_header();
