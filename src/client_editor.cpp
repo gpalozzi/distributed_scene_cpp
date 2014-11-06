@@ -24,6 +24,7 @@
 
 #include <cstdio>
 
+
 #define PICOJSON_USE_INT64
 
 using boost::asio::ip::tcp;
@@ -280,6 +281,9 @@ bool have_msg = false;
 bool send_mesh = false;
 bool restore_old = false;
 bool send_submesh = false;
+bool write_log    = false;
+bool r_write_log    = false;
+
 
 // glfw callback for character input
 void character_callback(GLFWwindow* window, unsigned int key) {
@@ -312,6 +316,13 @@ void character_callback(GLFWwindow* window, unsigned int key) {
         case 'a':
             send_submesh = true;
             break;
+        case 'l':
+            write_log = true;
+            break;
+        case 'k':
+            r_write_log = true;
+            break;
+
 
     }
 }
@@ -482,9 +493,24 @@ void uiloop(editor_client* client) {
             if (choice >= 0 && choice <= 5 && choice != scene->meshes[0]->_version) {
                 auto diff = new SubMesh();
                 string filename = "../scenes/diff/m" + to_string(scene->meshes[0]->_version) + "tom" + to_string(choice);
+                timing("deserialize_mesh[start]");
                 restore_submesh(*diff, filename.c_str());
+                timing("deserialize_mesh[end]");
+                // log diff
+                timing("diff[remove_vertex]", diff->remove_vertex.size());
+                timing("diff[remove_edge]", diff->remove_edge.size());
+                timing("diff[remove_triangle]", diff->remove_triangle.size());
+                timing("diff[remove_quad]", diff->remove_quad.size());
+                timing("diff[add_vertex]", diff->add_vertex.size());
+                timing("diff[add_edge]", diff->add_edge.size());
+                timing("diff[add_triangle]", diff->add_triangle.size());
+                timing("diff[add_quad]", diff->add_quad.size());
+                timing("diff[update_vertex]", diff->update_vertex.size());
+
                 // apply changes to mesh
+                timing("apply_diff[start]");
                 apply_changes(scene->meshes[0], diff, true);
+                timing("apply_diff[end]");
                 message("actual mesh version: %d\n", scene->meshes[0]->_version);
                 // send submesh
                 client->write(diff);
@@ -511,9 +537,13 @@ void uiloop(editor_client* client) {
                 case 2: // SubMesh
                 {
                     // get the next mesh recived
+                    timing("deserialize_from_msg[start]");
                     auto submesh = msg->as_submesh();
+                    timing("deserialize_from_msg[end]");
                     // apply differences
+                    timing("apply_diff[start]");
                     apply_changes(scene->meshes[0], submesh, true);
+                    timing("apply_diff[end]");
                     message("actual mesh version: %d\n", scene->meshes[0]->_version);
                     // remove from queue
                     client->remove_first();
@@ -545,6 +575,17 @@ void uiloop(editor_client* client) {
 //            }
 //            restore_old = false;
         }
+        
+        if(write_log){
+            save_timing("sender_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
+            write_log = false;
+        }
+        
+        if(r_write_log){
+            save_timing("receiver_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
+            r_write_log = false;
+        }
+
         
         /*
         if(have_msg){
@@ -588,10 +629,10 @@ int main(int argc, char** argv) {
     image_filename = (args.object_element("image_filename").as_string() != "") ?
     args.object_element("image_filename").as_string() :
     scene_filename.substr(0,scene_filename.size()-5)+".png";
-//    scene = load_json_scene(scene_filename);
+    // load scene
+    timing("parse_scene[start]");
     scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
-    //auto scene2 = load_json_scene("../scenes/shuttleply_v0.json");
-    //current_mesh_version = atoi(scene_filename.c_str());
+    timing("parse_scene[end]");
     if(not args.object_element("resolution").is_null()) {
         scene->image_height = args.object_element("resolution").as_int();
         scene->image_width = scene->camera->width * scene->image_height / scene->camera->height;

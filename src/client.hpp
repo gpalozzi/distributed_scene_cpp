@@ -98,6 +98,7 @@ public:
                              {
                                  // write on socket
                                  // need to unify do_write and do_write_mesh function!!!!
+                                 timing("send_mesh[start]");
                                  do_write_mesh();
                              }
                          });
@@ -173,6 +174,7 @@ private:
                                 {
                                     if (!ec && read_incoming_mesh_.decode_header())
                                     {
+                                        timing("recive_mesh[start]");
                                         do_read_mesh_body();
                                     }
                                     else
@@ -212,9 +214,22 @@ private:
                                 {
                                     if (!ec)
                                     {
-                                        std::cout << "message recived\n";
                                         // ack?
                                         pending_meshes_.push_back(read_incoming_mesh_);
+                                        timing("recive_mesh[end]");
+                                        timing("mesh_size", (long long) read_incoming_mesh_.length() );
+                                        // print recived op
+                                        switch (read_incoming_mesh_.type()) {
+                                            case 1: // Mesh
+                                                message("mesh recived\n");
+                                                break;
+                                            case 2: // SubMesh
+                                                message("submesh recived\n");
+                                                break;
+                                                
+                                            default:
+                                                break;
+                                        }
                                         do_read_mesh_header();
                                     }
                                     else
@@ -256,6 +271,8 @@ private:
                                  {
                                      if (!ec)
                                      {
+                                         timing("send_mesh[end]");
+                                         timing("mesh_size", (long long) write_meshes_.front().length() );
                                          write_meshes_.pop_front();
                                          if (!write_meshes_.empty())
                                          {

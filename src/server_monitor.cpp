@@ -290,6 +290,7 @@ bool mesh_ver = false;
 bool mesh_rot = false;
 bool have_msg = false;
 bool restore_old = false;
+bool write_log    = false;
 //bool send_submesh = false;    to implement if needed
 
 // glfw callback for character input
@@ -316,6 +317,10 @@ void character_callback(GLFWwindow* window, unsigned int key) {
 		case 'r':
 			restore_old = true;
 			break;
+        case 'l':
+            write_log = true;
+            break;
+
 //        case 'a':
 //            send_submesh = true;
 //            break;
@@ -494,9 +499,13 @@ void uiloop(editor_server* server) {
                 case 2: // SubMesh
                 {
                     // get the next mesh recived
+                    timing("deserialize_from_msg[start]");
                     auto submesh = msg->as_submesh();
+                    timing("deserialize_from_msg[end]");
                     // apply differences
+                    timing("apply_diff[start]");
                     apply_changes(scene->meshes[0], submesh, true);
+                    timing("apply_diff[end]");
                     message("actual mesh version: %d\n", scene->meshes[0]->_version);
                     // remove from queue
                     server->remove_first();
@@ -506,6 +515,11 @@ void uiloop(editor_server* server) {
                     break;
             }		}
 		
+        if(write_log){
+            save_timing("server_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
+            write_log = false;
+        }
+
 		if(restore_old){
             auto mesh = get_mesh_to_restrore();
             if (mesh) {
@@ -559,7 +573,9 @@ int main(int argc, char** argv) {
 	args.object_element("image_filename").as_string() :
 	scene_filename.substr(0,scene_filename.size()-5)+".png";
 	// load scene from json
+    timing("parse_scene[start]");
     scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
+    timing("parse_scene[end]");
 	if(not args.object_element("resolution").is_null()) {
 		scene->image_height = args.object_element("resolution").as_int();
 		scene->image_width = scene->camera->width * scene->image_height / scene->camera->height;

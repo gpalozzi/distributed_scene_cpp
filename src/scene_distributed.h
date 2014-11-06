@@ -420,5 +420,13 @@ void apply_changes_check(Mesh* mesh, Mesh* real_mesh, SubMesh* submesh, bool sav
 // swap 2 mesh
 void swap_mesh(Mesh* mesh, Scene* scene, bool save_history);
 
+// put in timing log
+void timing(const string& s);
+void timing(const string& s, long long i);
+
+
+// save timing log
+void save_timing(const string& s);
+
 #endif
 

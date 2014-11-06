@@ -9,6 +9,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <string>
 #include <boost/asio.hpp>
 #include "message.h"
 #include "mesh_msg.hpp"
@@ -83,10 +84,13 @@ public:
             //    edit_history_.pop_front();
             
             // send mesh to partecipant
+            timing("send_all[start]");
             for (auto participant: participants_)
                 if (participant->id != editor->id) {
                     participant->deliver_mesh(m_msg);
                 }
+            timing("send_all[end]");
+
         }
     }
     
@@ -187,6 +191,7 @@ public:
         write_meshes_.push_back(m_msg);
         if (!write_in_progress)
         {
+            timing("send_client_" + to_string(shared_from_this()->id) + "[start]");
             do_write_mesh();
         }
     }
@@ -219,6 +224,7 @@ private:
                                 {
                                     if (!ec && read_incoming_mesh_.decode_header())
                                     {
+                                        timing("recive_mesh[start]");
                                         do_read_mesh_body();
                                     }
                                     else
@@ -261,6 +267,7 @@ private:
                                 {
                                     if (!ec)
                                     {
+                                        timing("recive_mesh[end]");
                                         // print recived op
                                         switch (read_incoming_mesh_.type()) {
                                             case 1: // Mesh
@@ -269,10 +276,10 @@ private:
                                             case 2: // SubMesh
                                                 message("submesh recived\n");
                                                 break;
-
                                             default:
                                                 break;
                                         }
+                                        timing("mesh_size", (long long) read_incoming_mesh_.length() );
                                         // deliver mesh to all partecipant (except sender)
                                         room_.deliver_mesh(read_incoming_mesh_,shared_from_this());
                                         do_read_mesh_header();
@@ -318,6 +325,7 @@ private:
                                      if (!ec)
                                      {
                                          write_meshes_.pop_front();
+                                         timing("send_client_" + to_string(shared_from_this()->id) + "[end]");
                                          if (!write_meshes_.empty())
                                          {
                                              do_write_mesh();

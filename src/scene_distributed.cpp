@@ -1,6 +1,33 @@
 #include "scene_distributed.h"
 #include "id_reference.h"
 #include <iostream>
+#include <chrono>
+#include <ctime>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+
+#include <boost/serialization/map.hpp>
+
+map<string, long long> timing_log;
+
+void timing(const string& s){
+    std::chrono::high_resolution_clock::time_point time = std::chrono::high_resolution_clock::now();
+    timing_log[s] = time.time_since_epoch().count();
+}
+
+void timing(const string& s, long long i){
+    timing_log[s] = i;
+};
+
+// save timing log
+void save_timing(const string& s){
+    string filename = "../log/" + s;
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << timing_log;
+};
+
+
 
 // reference to solve
 vector<id_reference*> ref_to_solve;
