@@ -40,8 +40,7 @@ double to_kb(long long size){
     return size / (double)1024;
 }
 
-
-int main(int argc, const char * argv[]) {
+void print_session_log(){
     //  timelogs filenames
     string server_filename = "../log/server_timing_v35";
     string sender_filename = "../log/sender_timing_v35";
@@ -51,7 +50,7 @@ int main(int argc, const char * argv[]) {
     map<string,long long> server_log;
     map<string,long long> sender_log;
     map<string,long long> receiver_log;
-
+    
     // restore log in map
     restore_timelog(server_log, server_filename);
     restore_timelog(sender_log, sender_filename);
@@ -77,19 +76,56 @@ int main(int argc, const char * argv[]) {
     cout << "-\tsender deserialize_mesh: " << time_passed(sender_log["deserialize_mesh[start]"], sender_log["deserialize_mesh[end]"]) << " s" << endl;
     cout << "-\tsender apply_diff: " << time_passed(sender_log["apply_diff[start]"], sender_log["apply_diff[end]"]) << " s" << endl;
     cout << "-\tsender send_mesh: " << time_passed(sender_log["send_mesh[start]"], sender_log["send_mesh[end]"]) << " s" << endl;
-
+    
     cout << "\nreceiver local stats:" << endl;
     cout << "-\treceiver parsing: " << time_passed(receiver_log["parse_scene[start]"], receiver_log["parse_scene[end]"]) << " s" << endl;
     cout << "-\treceiver recive_mesh: " << time_passed(receiver_log["recive_mesh[start]"], receiver_log["recive_mesh[end]"]) << " s" << endl;
     cout << "-\treceiver deserialize_from_msg: " << time_passed(receiver_log["deserialize_from_msg[start]"], receiver_log["deserialize_from_msg[end]"]) << " s" << endl;
     cout << "-\treceiver apply_diff: " << time_passed(receiver_log["apply_diff[start]"], receiver_log["apply_diff[end]"]) << " s" << endl;
-
+    
     cout << "\nglobal stats:" << endl;
     cout << "\tsend -> receive: " << time_passed(sender_log["send_mesh[start]"], receiver_log["recive_mesh[end]"]) << " s" << endl;
     cout << "\tsender -> server: " << time_passed(sender_log["send_mesh[start]"], server_log["recive_mesh[end]"]) << " s" << endl;
     cout << "\tserver -> receiver: " << time_passed(server_log["send_client_1[start]"], receiver_log["recive_mesh[end]"]) << " s" << endl;
     cout << "\tsender_live -> receiver_live: " << time_passed(sender_log["apply_diff[end]"], receiver_log["apply_diff[end]"]) << " s" << endl;
     cout << "\tmessage size: " << to_kb(sender_log["mesh_size"]) << " kb" << endl;
+}
 
+void print_apply_log(){
+    //  timelogs filenames
+    string filename = "../log/apply_timing_v03";
+    
+    // timelogs structurs (map)
+    map<string,long long> app_log;
+    
+    // restore log in map
+    restore_timelog(app_log, filename);
+    
+    cout << "server log:" << endl;
+    print_timelog(app_log);
+    
+    cout << "\ntiming:" << endl;
+    cout << "-\t save_history: " << time_passed(app_log["save_history[start]"], app_log["save_history[end]"]) << " s" << endl;
+    cout << "-\t add_vertex: " << time_passed(app_log["add_vertex[start]"], app_log["add_vertex[end]"]) << " s" << endl;
+    cout << "-\t update_vertex: " << time_passed(app_log["update_vertex[start]"], app_log["update_vertex[end]"]) << " s" << endl;
+    cout << "-\t delete_vertex: " << time_passed(app_log["delete_vertex[start]"], app_log["delete_vertex[end]"]) << " s" << endl;
+    cout << "-\t init_position: " << time_passed(app_log["init_position[start]"], app_log["init_position[end]"]) << " s" << endl;
+    cout << "-\t remove_edges: " << time_passed(app_log["remove_edges[start]"], app_log["remove_edges[end]"]) << " s" << endl;
+    cout << "-\t remove_triangle: " << time_passed(app_log["remove_triangle[start]"], app_log["remove_triangle[end]"]) << " s" << endl;
+    cout << "-\t remove_quad: " << time_passed(app_log["remove_quad[start]"], app_log["remove_quad[end]"]) << " s" << endl;
+    cout << "-\t add_edge: " << time_passed(app_log["add_edge[start]"], app_log["add_edge[end]"]) << " s" << endl;
+    cout << "-\t add_triangle: " << time_passed(app_log["add_triangle[start]"], app_log["add_triangle[end]"]) << " s" << endl;
+    cout << "-\t add_quad: " << time_passed(app_log["add_quad[start]"], app_log["add_quad[end]"]) << " s" << endl;
+    cout << "-\t rebuild_index: " << time_passed(app_log["rebuild_index[start]"], app_log["rebuild_index[end]"]) << " s" << endl;
+    cout << "\n-\t apply_diff: " << time_passed(app_log["apply_diff[start]"], app_log["apply_diff[end]"]) << " s" << endl;
+    
+    cout << "\n-\t test: " << time_passed(app_log["apply_test[start]"], app_log["apply_test[end]"]) << " s" << endl;
+    cout << "\n-\t test: " << time_passed(app_log["apply_test2[start]"], app_log["apply_test2[end]"]) << " s" << endl;
+
+}
+
+
+int main(int argc, const char * argv[]) {
+    print_apply_log();
     return 0;
 }

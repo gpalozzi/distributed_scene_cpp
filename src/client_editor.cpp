@@ -19,6 +19,7 @@
 #include <boost/asio.hpp>
 #include <thread>
 #include <boost/thread/thread.hpp>
+#include <algorithm>
 
 #include <iostream>
 
@@ -397,6 +398,14 @@ void check_diff(Mesh* first_mesh, Mesh* second_mesh){
     }
 
 }
+template< typename tPair >
+struct second_t {
+    typename tPair::second_type operator()( const tPair& p ) const { return     p.second; }
+};
+
+template< typename tMap >
+second_t< typename tMap::value_type > second( const tMap& m ) { return second_t<     typename tMap::value_type >(); }
+
 
 // uiloop
 void uiloop(editor_client* client) {
@@ -506,14 +515,28 @@ void uiloop(editor_client* client) {
                 timing("diff[add_triangle]", diff->add_triangle.size());
                 timing("diff[add_quad]", diff->add_quad.size());
                 timing("diff[update_vertex]", diff->update_vertex.size());
+                
+                map<timestamp_t, vec3f> test;
+                for (auto v : scene->meshes[0]->vertex_id_map)
+                    test.emplace(v.first,scene->meshes[0]->pos[v.second]);
+                vector<vec3f> v,u;
+                timing_apply("apply_test[start]");
+                std::transform( test.begin(), test.end(), std::back_inserter( v ), second(test) );
+                timing_apply("apply_test[end]");
+                timing_apply("apply_test2[start]");
+                for ( auto v : test)
+                    u.push_back(v.second);
+                timing_apply("apply_test2[end]");
 
                 // apply changes to mesh
                 timing("apply_diff[start]");
+                timing_apply("apply_diff[start]");
                 apply_changes(scene->meshes[0], diff, true);
                 timing("apply_diff[end]");
+                timing_apply("apply_diff[end]");
                 message("actual mesh version: %d\n", scene->meshes[0]->_version);
                 // send submesh
-                client->write(diff);
+                //client->write(diff);
             }
 
             send_submesh = false;
@@ -577,7 +600,8 @@ void uiloop(editor_client* client) {
         }
         
         if(write_log){
-            save_timing("sender_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
+            //save_timing("sender_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
+            save_timing_apply("apply_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
             write_log = false;
         }
         

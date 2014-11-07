@@ -1,4 +1,5 @@
 #include "scene_distributed.h"
+#include "serialization.hpp"
 #include "id_reference.h"
 #include <iostream>
 #include <chrono>
@@ -9,6 +10,8 @@
 #include <boost/serialization/map.hpp>
 
 map<string, long long> timing_log;
+map<string, long long> apply_log;
+
 
 void timing(const string& s){
     std::chrono::high_resolution_clock::time_point time = std::chrono::high_resolution_clock::now();
@@ -27,7 +30,22 @@ void save_timing(const string& s){
     oa << timing_log;
 };
 
+void timing_apply(const string& s){
+    std::chrono::high_resolution_clock::time_point time = std::chrono::high_resolution_clock::now();
+    apply_log[s] = time.time_since_epoch().count();
+}
 
+void timing_apply(const string& s, long long i){
+    apply_log[s] = i;
+};
+
+// save timing log
+void save_timing_apply(const string& s){
+    string filename = "../log/" + s;
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << apply_log;
+};
 
 // reference to solve
 vector<id_reference*> ref_to_solve;
@@ -666,30 +684,38 @@ void solve_references(Scene* scene){
 
 // applay vertex creation, elimination and update on a mesh.
 // It updates also all other structure in a mesh (edges & faces)
-void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
-    
+void apply_changes_range(Mesh* mesh, SubMesh* submesh, bool save_history){
+    timing_apply("save_history[start]");
     if (save_history) {
-        auto clone = new Mesh(*mesh);
-        mesh_history.emplace(get_timestamp(),clone);
+        auto clone = new SubMesh(*submesh);
+        submesh_history.emplace(get_timestamp(),clone);
     }
+    timing_apply("save_history[end]");
     
     auto need_update_pos_faces = not submesh->remove_vertex.empty();
     
+    timing_apply("add_vertex[start]");
     // add new vertex
     for (auto v : submesh->add_vertex){
         mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
         mesh->pos.push_back(v.second);
         mesh->norm.push_back(zero3f);
     }
+    
+    timing_apply("add_vertex[end]");
+    timing_apply("update_vertex[start]");
     // update existing vertex
     for (auto v : submesh->update_vertex) mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
-
+    timing_apply("update_vertex[end]");
+    timing_apply("delete_vertex[start]");
     // vertex delete
-    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);    
-
+    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);
+    timing_apply("delete_vertex[end]");
+    timing_apply("init_position[start]");
     // restore vertex position indexing
     if(need_update_pos_faces) indexing_vertex_position(mesh);
-
+    timing_apply("init_position[end]");
+    timing_apply("remove_edges[start]");
     // remove edges
     for (auto edge : submesh->remove_edge){
         /*
@@ -700,13 +726,16 @@ void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
          */
         mesh->edge.erase(edge);
     }
-    
+    timing_apply("remove_edges[end]");
+    timing_apply("remove_triangle[start]");
     // remove triangles
     for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
-    
+    timing_apply("remove_triangle[end]");
+    timing_apply("remove_quad[start]");
     // remove quads
     for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
-    
+    timing_apply("remove_quad[end]");
+    timing_apply("add_edge[start]");
     // add edges
     for (auto edge : submesh->add_edge){
         mesh->edge.insert(edge);
@@ -723,12 +752,15 @@ void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
          }
          */
     }
-    
+    timing_apply("add_edge[end]");
+    timing_apply("add_triangle[start]");
     // add triangles
     for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
-    
+    timing_apply("add_triangle[end]");
+    timing_apply("add_quad[start]");
     // add quads
     for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    timing_apply("add_quad[end]");
     
     // set mesh version for shuttle
     mesh->_version = submesh->_version;
@@ -739,7 +771,102 @@ void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
     bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
     not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
     not submesh->update_vertex.empty();
+    timing_apply("rebuild_index[start]");
     init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
+    timing_apply("rebuild_index[end]");
+}
+
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
+    timing_apply("save_history[start]");
+    if (save_history) {
+        auto clone = new SubMesh(*submesh);
+        submesh_history.emplace(get_timestamp(),clone);
+    }
+    timing_apply("save_history[end]");
+
+    auto need_update_pos_faces = not submesh->remove_vertex.empty();
+    
+    timing_apply("add_vertex[start]");
+    // add new vertex
+    for (auto v : submesh->add_vertex){
+        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
+        mesh->pos.push_back(v.second);
+        mesh->norm.push_back(zero3f);
+    }
+    timing_apply("add_vertex[end]");
+    timing_apply("update_vertex[start]");
+    // update existing vertex
+    for (auto v : submesh->update_vertex) mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
+    timing_apply("update_vertex[end]");
+    timing_apply("delete_vertex[start]");
+    // vertex delete
+    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);    
+    timing_apply("delete_vertex[end]");
+    timing_apply("init_position[start]");
+    // restore vertex position indexing
+    if(need_update_pos_faces) indexing_vertex_position(mesh);
+    timing_apply("init_position[end]");
+    timing_apply("remove_edges[start]");
+    // remove edges
+    for (auto edge : submesh->remove_edge){
+        /*
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
+         mesh->edge_index.erase(mesh->edge_index.begin()+index);
+         }
+         */
+        mesh->edge.erase(edge);
+    }
+    timing_apply("remove_edges[end]");
+    timing_apply("remove_triangle[start]");
+    // remove triangles
+    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
+    timing_apply("remove_triangle[end]");
+    timing_apply("remove_quad[start]");
+    // remove quads
+    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
+    timing_apply("remove_quad[end]");
+    timing_apply("add_edge[start]");
+    // add edges
+    for (auto edge : submesh->add_edge){
+        mesh->edge.insert(edge);
+        /*
+         auto pair = mesh->edge.insert(edge);
+         if (not need_update_pos_faces){
+         int index = distance(mesh->edge.begin(), pair.first);
+         // for each vertex find the id in vertices vector and get the index
+         auto a = mesh->vertex_id_map[edge.second.first];
+         auto b = mesh->vertex_id_map[edge.second.second];
+         
+         // put this 2 indices in vector
+         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
+         }
+         */
+    }
+    timing_apply("add_edge[end]");
+    timing_apply("add_triangle[start]");
+    // add triangles
+    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    timing_apply("add_triangle[end]");
+    timing_apply("add_quad[start]");
+    // add quads
+    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    timing_apply("add_quad[end]");
+
+    // set mesh version for shuttle
+    mesh->_version = submesh->_version;
+    
+    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
+    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
+    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
+    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
+    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
+    not submesh->update_vertex.empty();
+    timing_apply("rebuild_index[start]");
+    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
+    timing_apply("rebuild_index[end]");
 }
 
 // applay vertex creation, elimination and update on a mesh.

@@ -283,6 +283,21 @@ struct SubMesh {
     // constructor
     SubMesh() {}
     
+    // copy constructor
+    SubMesh(const SubMesh& submesh){
+        remove_vertex = submesh.remove_vertex;
+        remove_edge = submesh.remove_edge;
+        remove_triangle = submesh.remove_triangle;
+        remove_quad = submesh.remove_quad;
+        add_vertex = submesh.add_vertex;
+        add_edge = submesh.add_edge;
+        add_triangle = submesh.add_triangle;
+        update_vertex = submesh.update_vertex;
+        _id_ = submesh._id_;
+        _version = submesh._version;
+    }
+    
+    // constructor from 2 mesh
     SubMesh(const Mesh* first_mesh,const Mesh* second_mesh){
         //check vertex difference
         //  removed vertex
@@ -412,6 +427,9 @@ Mesh* get_mesh_to_restrore();
 // applay vertex creation, elimination and update on a mesh.
 // It updates also all other structure in a mesh (edges & faces)
 void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history);
+// applay vertex creation, elimination and update on a mesh.
+// It updates also all other structure in a mesh (edges & faces)
+void apply_changes_range(Mesh* mesh, SubMesh* submesh, bool save_history);
 
 // applay vertex creation, elimination and update on a mesh.
 // It updates also all other structure in a mesh (edges & faces)
@@ -424,9 +442,15 @@ void swap_mesh(Mesh* mesh, Scene* scene, bool save_history);
 void timing(const string& s);
 void timing(const string& s, long long i);
 
-
 // save timing log
 void save_timing(const string& s);
+
+// put in timing log
+void timing_apply(const string& s);
+void timing_apply(const string& s, long long i);
+
+// save timing log
+void save_timing_apply(const string& s);
 
 #endif
 
