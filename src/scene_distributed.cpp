@@ -421,10 +421,10 @@ void init_mesh_properties_from_map(Mesh* mesh, bool force_quad_update, bool forc
         // for each quad
         for(auto quad : mesh->quad){
             // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[quad.second.first];
-            auto b = mesh->vertex_id_map[quad.second.second];
-            auto c = mesh->vertex_id_map[quad.second.third];
-            auto d = mesh->vertex_id_map[quad.second.fourth];
+            auto a = mesh->vertex_id_map[quad.second];
+            auto b = mesh->vertex_id_map[quad.second];
+            auto c = mesh->vertex_id_map[quad.second];
+            auto d = mesh->vertex_id_map[quad.second];
             
             // put this 4 indices in vector
             if (quad_indices) mesh->quad_index.push_back({a,b,c,d});
@@ -493,14 +493,56 @@ void indexing_vertex_position(Mesh* mesh){
     mesh->pos.clear();
     for (auto& vertex : mesh->vertex_id_map){
         // move vertex norm if needed
-        if (not mesh->norm.empty()) mesh->norm.push_back(temp_norm[vertex.second]);
+        if (not mesh->norm.empty()) mesh->norm.push_back(temp_norm[vertex.second.first]);
         // move vertex position
-        mesh->pos.push_back(temp[vertex.second]);
-        vertex.second = mesh->pos.size()-1;
+//        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
+        mesh->pos.push_back(temp[vertex.second.first]);
+        vertex.second.first = mesh->pos.size()-1;
+        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
     }
     temp_norm.clear();
     temp.clear();
 }
+
+void indexing_triangle_position(Mesh* mesh){
+    vector<vec3i> temp = mesh->triangle_index;
+    mesh->triangle_index.clear();
+    for (auto& triangle : mesh->triangle){
+        // move index position
+        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
+        mesh->triangle_index.push_back(temp[get<0>(triangle.second)]);
+        get<0>(triangle.second) = mesh->triangle_index.size()-1;
+        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
+    }
+    temp.clear();
+}
+
+void indexing_quad_position(Mesh* mesh){
+    vector<vec4i> temp = mesh->quad_index;
+    mesh->quad_index.clear();
+    for (auto& quad : mesh->quad){
+        // move index position
+        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
+        mesh->quad_index.push_back(temp[get<0>(quad.second)]);
+        get<0>(quad.second) = mesh->quad_index.size()-1;
+        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
+    }
+    temp.clear();
+}
+
+void indexing_edge_position(Mesh* mesh){
+    vector<vec2i> temp = mesh->edge_index;
+    mesh->edge_index.clear();
+    for (auto& edge : mesh->edge){
+        // move index position
+        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
+        mesh->edge_index.push_back(temp[get<0>(edge.second)]);
+        get<0>(edge.second) = mesh->edge_index.size()-1;
+        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
+    }
+    temp.clear();
+}
+
 
 Mesh* json_parse_mesh(const jsonvalue& json) {
     auto mesh = new Mesh();
@@ -533,8 +575,9 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             auto v = vec3f();
             json_set_optvalue(vertex, v, "pos");
             //use map
-            mesh->vertex_id_map.emplace(_id,mesh->pos.size());
-            // use array
+            //mesh->vertex_id_map.emplace(_id,mesh->pos.size());
+            mesh->vertex_id_map.emplace(_id, make_pair(mesh->pos.size(),vector<timestamp_t>() ));
+            // use array [deprecated]
             //mesh->vertex_ids.push_back(_id);
             mesh->pos.push_back(v);
         }
@@ -552,8 +595,26 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(triangle, v, "ver_ids");
             //mesh->triangle_ids.push_back(_id);
             //mesh->triangle.push_back(v);
-            mesh->triangle.emplace(_id,v);
+            // find indices position
+            auto& a = mesh->vertex_id_map[v.first];
+            auto& b = mesh->vertex_id_map[v.second];
+            auto& c = mesh->vertex_id_map[v.third];
+            // insert this id in vertex adiacencis
+            a.second.push_back(_id);
+            b.second.push_back(_id);
+            c.second.push_back(_id);
+            // compute normal
+            auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+            // add normal to vertex normal
+            mesh->norm[a.first] += n;
+            mesh->norm[b.first] += n;
+            mesh->norm[c.first] += n;
+            // build triangle structure
+            mesh->triangle.emplace(_id,make_tuple(mesh->triangle_index.size(),v,n));
+            mesh->triangle_index.push_back({a.first,b.first,c.first});
         }
+        // keep triangle index orderd by map key order
+        indexing_triangle_position(mesh);
     }
     
     // quad
@@ -566,8 +627,35 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(quad, v, "ver_ids");
             //mesh->quad_ids.push_back(_id);
             //mesh->quad.push_back(v);
-            mesh->quad.emplace(_id,v);
+            // find indices position
+            auto& a = mesh->vertex_id_map[v.first];
+            auto& b = mesh->vertex_id_map[v.second];
+            auto& c = mesh->vertex_id_map[v.third];
+            auto& d = mesh->vertex_id_map[v.fourth];
+            // insert this id in vertex adiacencis
+            a.second.push_back(_id);
+            b.second.push_back(_id);
+            c.second.push_back(_id);
+            d.second.push_back(_id);
+            // compute normal
+            auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                               normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+            // add normal to vertex normal
+            mesh->norm[a.first] += n;
+            mesh->norm[b.first] += n;
+            mesh->norm[c.first] += n;
+            mesh->norm[d.first] += n;
+            // build triangle structure
+            mesh->quad.emplace(_id,make_tuple(mesh->quad_index.size(),v,n));
+            mesh->quad_index.push_back({a.first,b.first,c.first,d.first});
         }
+        // keep quad index orderd by map key order
+        indexing_quad_position(mesh);
+    }
+    // apply mean to normals
+    for (auto v : mesh->vertex_id_map) {
+        if(auto mean = v.second.second.size()) mesh->norm[v.second.first] /= mean;
+            
     }
     
     // edges
@@ -580,8 +668,18 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             json_set_optvalue(edge, v, "ver_ids");
             //mesh->edge_ids.push_back(_id);
             //mesh->edge.push_back(v);
-            mesh->edge.emplace(_id,v);
+            // find indices position
+            auto& a = mesh->vertex_id_map[v.first];
+            auto& b = mesh->vertex_id_map[v.second];
+            // insert this id in vertex adiacencis
+            a.second.push_back(_id);
+            b.second.push_back(_id);
+            // build triangle structure
+            mesh->edge.emplace(_id,make_pair(mesh->edge_index.size(),v));
+            mesh->edge_index.push_back({a.first,b.first});
         }
+        // keep edge index orderd by map key order
+        indexing_edge_position(mesh);
     }
 
     //if(json.object_contains("norm")) json_set_optvalue(json, mesh->norm, "norm");

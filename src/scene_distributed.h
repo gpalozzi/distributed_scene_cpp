@@ -108,7 +108,8 @@ struct MeshCollision {
 struct Mesh {
     frame3f         frame = identity_frame3f;   // frame
     //vector<timestamp_t> vertex_ids;             // vertex ids
-    map<timestamp_t,int> vertex_id_map;
+    //map<timestamp_t,int> vertex_id_map;
+    map<timestamp_t, pair<int,vector<timestamp_t>>> vertex_id_map;
     vector<vec3f>   pos;                        // vertex position
     
     vector<timestamp_t> normal_ids;             // vertex normal ids
@@ -118,15 +119,17 @@ struct Mesh {
     vector<vec2f>   texcoord;                   // vertex texcture coordinates
     
     //vector<timestamp_t> triangle_ids;           // triangle faces ids
-    map<timestamp_t,vec3id>   triangle;                  // triangle
+//    map<timestamp_t,vec3id>   triangle;                  // triangle
+    map<timestamp_t,tuple<int,vec3id,vec3f>>   triangle;         // triangle
     vector<vec3i>   triangle_index;             // triangle index
     
     //vector<timestamp_t> quad_ids;               // quad faces ids
-    map<timestamp_t,vec4id>   quad;                      // quad
+    map<timestamp_t,tuple<int,vec4id,vec3f>>   quad;                      // quad
     vector<vec4i>   quad_index;                 // quad index
     
     //vector<timestamp_t> edge_ids;               // edges ids
-    map<timestamp_t,vec2id>   edge;                      // edges
+//    map<timestamp_t,vec2id>   edge;                      // edges
+    map<timestamp_t,tuple<int,vec2id>>   edge;                      // edges
     vector<vec2i>   edge_index;                 // edges index
     
     vector<int>     point;                      // point
