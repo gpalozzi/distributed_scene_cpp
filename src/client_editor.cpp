@@ -25,6 +25,23 @@
 
 #include <cstdio>
 
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+
+#include <boost/serialization/base_object.hpp>
+#include <boost/serialization/utility.hpp>
+#include <boost/serialization/vector.hpp>
+#include <boost/serialization/map.hpp>
+#include <boost/serialization/assume_abstract.hpp>
+
+// filesystem lib
+#include <boost/filesystem.hpp>
+#include <boost/date_time.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
+#include <boost/date_time/posix_time/conversion.hpp>
+#include <sys/stat.h>
+
 
 #define PICOJSON_USE_INT64
 
@@ -36,8 +53,9 @@ int gl_vertex_shader_id = 0;    // OpenGL vertex shader handle
 int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
 
-//int current_mesh_version = -1;
-//map<timestamp_t,Mesh*> mesh_history;
+// check_dir var
+map<string,pair<bool, bool>> file_upload;
+int client_id;
 
 
 // check if an OpenGL error
@@ -252,11 +270,15 @@ void shade(Scene* scene, bool wireframe) {
         
         // draw triangles and quads
         if(not wireframe) {
-            if(mesh->triangle.size()) glDrawElements(GL_TRIANGLES, mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
-            if(mesh->quad.size()) glDrawElements(GL_QUADS, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
+//            if(mesh->triangle.size()) glDrawElements(GL_TRIANGLES, mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
+//            if(mesh->quad.size()) glDrawElements(GL_QUADS, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
+            if(mesh->triangle.size()) glDrawRangeElements(GL_TRIANGLES, 0, mesh->pos.size() - 1,  mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
+            if(mesh->quad.size()) glDrawRangeElements(GL_QUADS, 0, mesh->pos.size() - 1, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
+
         } else {
             //auto edges = EdgeMap(mesh->triangle, mesh->quad).edges();
-            if(mesh->edge.size()) glDrawElements(GL_LINES, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
+            //if(mesh->edge.size()) glDrawElements(GL_LINES, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
+            if(mesh->edge.size()) glDrawRangeElements(GL_LINES,  0, mesh->pos.size() - 1, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
         }
         
         // draw line sets
@@ -281,7 +303,7 @@ bool mesh_rot = false;
 bool have_msg = false;
 bool send_mesh = false;
 bool restore_old = false;
-bool send_submesh = false;
+bool send_meshdiff = false;
 bool write_log    = false;
 bool r_write_log    = false;
 
@@ -315,7 +337,7 @@ void character_callback(GLFWwindow* window, unsigned int key) {
             restore_old = true;
             break;
         case 'a':
-            send_submesh = true;
+            send_meshdiff = true;
             break;
         case 'l':
             write_log = true;
@@ -342,77 +364,157 @@ void restore_mesh(Mesh &m, const char * filename)
     std::ifstream ifs(filename);
     boost::archive::text_iarchive ia(ifs);
     
-    // restore the schedule from the archive
+    // restore from the archive
     ia >> m;
 }
 
-void save_submesh(const SubMesh &m, const char * filename){
+void save_meshdiff(const MeshDiff &m, const char * filename){
     // make an archive
     std::ofstream ofs(filename);
     boost::archive::text_oarchive oa(ofs);
     oa << m;
 }
 
-void restore_submesh(SubMesh &m, const char * filename)
+void restore_meshdiff(MeshDiff &m, const char * filename)
 {
     // open the archive
     std::ifstream ifs(filename);
     boost::archive::text_iarchive ia(ifs);
     
-    // restore the schedule from the archive
+    // restore from the archive
     ia >> m;
 }
 
-void check_diff(Mesh* first_mesh, Mesh* second_mesh){
-    if (first_mesh->vertex_id_map.size() != second_mesh->vertex_id_map.size()) message("vertex_id_map size different\n");
-    
-    map<timestamp_t,int>::iterator first = first_mesh->vertex_id_map.begin();
-    map<timestamp_t,int>::iterator second = second_mesh->vertex_id_map.begin();
-
-    for (auto i = 0; i < first_mesh->vertex_id_map.size(); i++){
-        if (first->first != second->first or first->second != second->second )
-            message("[%llu / %llu] - %d != %d index different\n", first->first, second->first, first->second, second->second);
-        first++;
-        second++;
-    }
-    
-    if (first_mesh->pos.size() != second_mesh->pos.size()) message("pos size different\n");
-
-    for (auto i = 0; i < first_mesh->pos.size(); i++)
-        if (not (first_mesh->pos[i] == second_mesh->pos[i])) message("pos[%d] different\n", i);
-    
-    if (first_mesh->norm.size() != second_mesh->norm.size()) message("norm size different\n");
-    
-    for (auto i = 0; i < first_mesh->norm.size(); i++)
-        if (not (first_mesh->norm[i] == second_mesh->norm[i])) message("norm[%d] different\n", i);
-
-    if (first_mesh->triangle.size() != second_mesh->triangle.size()) message("norm size different\n");
-    
-    map<timestamp_t,vec3id>::iterator f = first_mesh->triangle.begin();
-    map<timestamp_t,vec3id>::iterator s = first_mesh->triangle.begin();
-
-    for (auto i = 0; i < first_mesh->vertex_id_map.size(); i++){
-        if (f->first != s->first or f->second == s->second ) message("[%llu / %llu] - vec3id different\n", f->first, s->first);
-        f++;
-        s++;
-    }
-
+void save_cameradiff(const CameraDiff &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
 }
-template< typename tPair >
-struct second_t {
-    typename tPair::second_type operator()( const tPair& p ) const { return     p.second; }
-};
 
-template< typename tMap >
-second_t< typename tMap::value_type > second( const tMap& m ) { return second_t<     typename tMap::value_type >(); }
+void restore_cameradiff(CameraDiff &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore from the archive
+    ia >> m;
+}
 
+void save_lightdiff(const LightDiff &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_lightdiff(LightDiff &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore from the archive
+    ia >> m;
+}
+
+void save_materialdiff(const MaterialDiff &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_materialdiff(MaterialDiff &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore from the archive
+    ia >> m;
+}
+
+void save_scenediff(const SceneDiff &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_scenediff(SceneDiff &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore from the archive
+    ia >> m;
+}
 
 // uiloop
 void uiloop(editor_client* client) {
+    
+    vector<Light*> l;
+    vector<Camera*> c;
+    vector<Material*> m;
+    vector<Mesh*> me;
+    load_json_objects(&l, &m, &c, &me, "../scenes/demo/objects.json");
+
+    auto camera0 = new Camera();
+    auto camera1 = new Camera();
+    auto camera2 = new Camera();
+    auto camera3 = new Camera();
+    auto camera4 = new Camera();
+    camera0->frame = frame3f(vec3f(-8.59761,3.36389,7.19465),vec3f(0.641762,-0,0.766904),vec3f(0.220408,0.957811,-0.184442),vec3f(-0.734548,0.2874,0.614687));
+    camera1->frame = frame3f(vec3f(-1.90267,0.285991,11.5454),vec3f(0.98669,-0,0.162613),vec3f(0.00397429,0.999701,-0.0241149),vec3f(-0.162564,0.0244402,0.986395));
+    camera2->frame = frame3f(vec3f(3.18239,1.01947,11.2174),vec3f(0.962037,0,-0.27292),vec3f(-0.0237732,0.996199,-0.0837999),vec3f(0.271883,0.0871068,0.95838));
+    camera3->frame = frame3f(vec3f(1.3975,8.76373,-7.63183),vec3f(-0.983646,0,-0.180115),vec3f(-0.13486,0.662859,0.736499),vec3f(0.119391,0.748744,-0.652019));
+    camera4->frame = frame3f(vec3f(1.83261,2.76368,11.358),vec3f(0.987231,0,-0.159292),vec3f(-0.0372069,0.972338,-0.230594),vec3f(0.154886,0.233576,0.959923));
+    camera0->_id_ = 14132915310782699;
+    camera1->_id_ = 14132915310782699;
+    camera2->_id_ = 14132915310782699;
+    camera3->_id_ = 14132915310782699;
+    camera4->_id_ = 14132915310782699;
+
+    c.push_back(camera0);
+    c.push_back(camera1);
+    c.push_back(camera2);
+    c.push_back(camera3);
+    c.push_back(camera4);
+    
+
+    vector<vec4i> movesA;
+    
+    movesA.push_back({0,0,3,0});
+    movesA.push_back({1,0,9,1});
+    movesA.push_back({1,2,9,2});
+    movesA.push_back({2,2,7,2});
+    movesA.push_back({2,2,7,4});
+    movesA.push_back({4,2,9,4});
+    movesA.push_back({0,4,8,5});
+    movesA.push_back({0,4,8,5});
+    movesA.push_back({0,2,6,5});
+
+    vector<vec4i> movesB;
+    
+    movesB.push_back({1,0,9,0});
+    movesB.push_back({1,1,9,2});
+    movesB.push_back({1,3,9,2});
+    movesB.push_back({2,2,7,3});
+    movesB.push_back({2,0,7,4});
+    movesB.push_back({4,2,9,5});
+    movesB.push_back({0,4,8,4});
+    movesB.push_back({0,4,5,5});
+    
+    int i = 0;
+    
     auto ok = glfwInit();
     error_if_not(ok, "glfw init error");
     
     glfwWindowHint(GLFW_SAMPLES, scene->image_samples);
+    
     
     auto window = glfwCreateWindow(scene->image_width,
                                    scene->image_height,
@@ -491,55 +593,74 @@ void uiloop(editor_client* client) {
             send_mesh = false;
         }
         
-        if(send_submesh){
-            message("Mesh versions:\n");
-            for(auto i : range(6)){
-                message("version [%d]\n",i);
+        if(send_meshdiff){
+            message("Actual versions:\n");
+            message("\t- camera %llu - %d\n",scene->camera->_id_, scene->camera->_version);
+            message("\t- light %llu - %d\n",scene->lights[0]->_id_, scene->lights[0]->_version);
+            message("\t- mesh %llu - %d\n",scene->meshes[0]->_id_, scene->meshes[0]->_version);
+            message("\t- material/mesh %llu - %d\n",scene->meshes[0]->mat->_id_, scene->meshes[0]->mat->_version);
+            message("\t- material %llu - %d\n",scene->materials[0]->_id_, scene->materials[0]->_version);
+
+            message("Chose version from 0 to 5 for each component (-1 to exit): ");
+            message("es. 3 2 4 5 1\n");
+            int c,l,m,mm,mat;
+            std::cin >> c >> l >> m >> mm >> mat;
+            string filename;
+            auto scene_diff = new SceneDiff();
+            //camera diff
+            if (c >= 0 && c <= 5 && c != scene->camera->_version) {
+                auto camera_diff = new CameraDiff();
+                filename = "../scenes/diff/c" + to_string(scene->camera->_version) + "toc" + to_string(c);
+                timing("deserialize_camera[start]");
+                restore_cameradiff(*camera_diff, filename.c_str());
+                timing("deserialize_camera[end]");
+                scene_diff->cameras.push_back(camera_diff);
             }
-            message("Chose version (-1 to exit): ");
-            auto choice = 1;
-            std::cin >> choice;
-            if (choice >= 0 && choice <= 5 && choice != scene->meshes[0]->_version) {
-                auto diff = new SubMesh();
-                string filename = "../scenes/diff/m" + to_string(scene->meshes[0]->_version) + "tom" + to_string(choice);
+            if (l >= 0 && l <= 5 && l != scene->lights[0]->_version) {
+                auto light_diff = new LightDiff();
+                filename = "../scenes/diff/l" + to_string(scene->lights[0]->_version) + "tol" + to_string(l);
+                timing("deserialize_light[start]");
+                restore_lightdiff(*light_diff, filename.c_str());
+                timing("deserialize_light[end]");
+                scene_diff->lights.push_back(light_diff);
+            }
+            if (m >= 0 && m <= 5 && m != scene->meshes[0]->_version) {
+                auto mesh_diff = new MeshDiff();
+                filename = "../scenes/diff/m" + to_string(scene->meshes[0]->_version) + "tom" + to_string(m);
                 timing("deserialize_mesh[start]");
-                restore_submesh(*diff, filename.c_str());
+                restore_meshdiff(*mesh_diff, filename.c_str());
                 timing("deserialize_mesh[end]");
-                // log diff
-                timing("diff[remove_vertex]", diff->remove_vertex.size());
-                timing("diff[remove_edge]", diff->remove_edge.size());
-                timing("diff[remove_triangle]", diff->remove_triangle.size());
-                timing("diff[remove_quad]", diff->remove_quad.size());
-                timing("diff[add_vertex]", diff->add_vertex.size());
-                timing("diff[add_edge]", diff->add_edge.size());
-                timing("diff[add_triangle]", diff->add_triangle.size());
-                timing("diff[add_quad]", diff->add_quad.size());
-                timing("diff[update_vertex]", diff->update_vertex.size());
-                
-                map<timestamp_t, vec3f> test;
-                for (auto v : scene->meshes[0]->vertex_id_map)
-                    test.emplace(v.first,scene->meshes[0]->pos[v.second]);
-                vector<vec3f> v,u;
-                timing_apply("apply_test[start]");
-                std::transform( test.begin(), test.end(), std::back_inserter( v ), second(test) );
-                timing_apply("apply_test[end]");
-                timing_apply("apply_test2[start]");
-                for ( auto v : test)
-                    u.push_back(v.second);
-                timing_apply("apply_test2[end]");
-
-                // apply changes to mesh
-                timing("apply_diff[start]");
-                timing_apply("apply_diff[start]");
-                apply_changes(scene->meshes[0], diff, true);
-                timing("apply_diff[end]");
-                timing_apply("apply_diff[end]");
-                message("actual mesh version: %d\n", scene->meshes[0]->_version);
-                // send submesh
-                //client->write(diff);
+                scene_diff->meshes.push_back(mesh_diff);
             }
-
-            send_submesh = false;
+            if (mat >= 0 && mat <= 5 && mat != scene->materials[0]->_version) {
+                auto material_diff = new MaterialDiff();
+                filename = "../scenes/diff/mat" + to_string(scene->materials[0]->_version) + ".1tomat" + to_string(mat) + ".1";
+                timing("deserialize_material[start]");
+                restore_materialdiff(*material_diff, filename.c_str());
+                timing("deserialize_material[end]");
+                scene_diff->materials.push_back(material_diff);
+            }
+            if (mm >= 0 && mm <= 5 && mm != scene->meshes[0]->mat->_version) {
+                auto material_diff = new MaterialDiff();
+                filename = "../scenes/diff/mat" + to_string(scene->meshes[0]->mat->_version) + ".2tomat" + to_string(mm) + ".2";
+                timing("deserialize_mesh/mat[start]");
+                restore_materialdiff(*material_diff, filename.c_str());
+                timing("deserialize_mesh/mat[end]");
+                scene_diff->materials.push_back(material_diff);
+            }
+            
+            // apply changes to mesh
+            timing("apply_diff[start]");
+            timing_apply("apply_diff[start]");
+            timestamp_t label = get_timestamp();
+            apply_change_reverse(scene, scene_diff, label);
+            timing("apply_diff[end]");
+            timing_apply("apply_diff[end]");
+            message("actual mesh version: %d\n", scene->meshes[0]->_version);
+            // send meshdiff
+            //client->write(scene_diff);
+            scene->camera->frame = frame3f(vec3f(-1.68528,1.69959,11.5761),vec3f(0.999631,0,-0.0271681),vec3f(-0.00394499,0.989401,-0.145153),vec3f(0.0268802,0.145207,0.989036));
+            send_meshdiff = false;
         }
         
         while(client->has_pending_mesh()){
@@ -547,6 +668,18 @@ void uiloop(editor_client* client) {
             auto msg = client->get_next_pending();
             // switch between message type
             switch (msg->type()) {
+                case 0: // Message
+                {
+                    auto message_tokens = msg->as_message();
+                    if(message_tokens[0] == "restore_version"){
+                        timing_apply("restore_version[end]");
+                        restore_to_version(scene, atoll(message_tokens[1].c_str()));
+                        timing_apply("restore_version[end]");
+                        message("scene restored to version %llu\n", message_tokens[1].c_str());
+                    }
+                    client->remove_first();
+                }
+                    break;
                 case 1: // Mesh
                 {
                     // get the next mesh recived
@@ -557,19 +690,42 @@ void uiloop(editor_client* client) {
                     client->remove_first();
                 }
                     break;
-                case 2: // SubMesh
+                case 2: // SceneDiff
                 {
-                    // get the next mesh recived
                     timing("deserialize_from_msg[start]");
-                    auto submesh = msg->as_submesh();
+                    auto scenediff = msg->as_scenediff();
                     timing("deserialize_from_msg[end]");
                     // apply differences
                     timing("apply_diff[start]");
-                    apply_changes(scene->meshes[0], submesh, true);
+                    apply_change(scene, scenediff, 0);
                     timing("apply_diff[end]");
                     message("actual mesh version: %d\n", scene->meshes[0]->_version);
                     // remove from queue
                     client->remove_first();
+                }
+                    break;
+                case 3: // MeshDiff
+                {
+                    // get the next mesh recived
+                    timing("deserialize_from_msg[start]");
+                    auto meshdiff = msg->as_meshdiff();
+                    timing("deserialize_from_msg[end]");
+                    // apply differences
+                    timing("apply_diff[start]");
+                    apply_mesh_change(scene->meshes[0], meshdiff, get_timestamp());
+                    timing("apply_diff[end]");
+                    message("actual mesh version: %d\n", scene->meshes[0]->_version);
+                    // remove from queue
+                    client->remove_first();
+                }
+                    break;
+                case 7: // OBJ - MTL
+                {
+                    // save files in folder
+                    //msg->save_files("/Users/gpalozzi/Desktop/test/client" + to_string(client_id) + "/received");
+                    //message("scene reloaded\n");
+                    // remove from queue
+                    //client->remove_first();
                 }
                     break;
                 default:
@@ -578,25 +734,16 @@ void uiloop(editor_client* client) {
         }
         
         if(restore_old){
-            auto mesh = get_mesh_to_restrore();
-            if (mesh) {
-                swap_mesh(mesh, scene, true);
+            timestamp_t old = get_global_version();
+            auto version = restore_version(scene);
+            
+            if(old != version){
+                stringstream restore_message;
+                restore_message << "restore_version " << version;
+                client->write(restore_message.str().c_str());
             }
+            
             restore_old = false;
-//            vector<timestamp_t> choices;
-//            int choice = 1;
-//            message("mesh history\n");
-//            for(auto m : mesh_history){
-//                message("[%d] %llu\n",choice++,m.first);
-//                choices.push_back(m.first);
-//            }
-//            message("Mesh to restore (0 = exit): ");
-//            choice = 0;
-//            std::cin >> choice;
-//            if (choice > 0 ) {
-//                swap_mesh(mesh_history[choices[choice-1]],true);
-//            }
-//            restore_old = false;
         }
         
         if(write_log){
@@ -611,26 +758,65 @@ void uiloop(editor_client* client) {
         }
 
         
-        /*
-        if(have_msg){
-            auto msg = server->get_next_pending_op();
+        if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) or have_msg) {
+        //if(have_msg){
+            int mat = 0;
+            int luc = 0;
+            int cam = 0;
+            int mes = 0;
+
             
-            if(msg){
-                switch (msg[0]) {
-                    case 'm':
-                        mesh_mat = true;
-                        break;
-                    case 'v':
-                        mesh_ver = true;
-                        break;
-                    case 'r':
-                        mesh_rot = true;
-                }
+            if (client_id == 0 and i < movesA.size()){
+                auto move = movesA[i++];
+            
+                mat = move.x;
+                luc = move.y;
+                cam = move.z;
+                mes = move.w;
+            
+                cout << mat << luc << cam << mes << endl;
             }
-            else
-                have_msg = false;
+            
+            if (client_id == 1 and i < movesB.size()){
+                auto move = movesB[i++];
+                
+                mat = move.x;
+                luc = move.y;
+                cam = move.z;
+                mes = move.w;
+                
+                cout << mat << luc << cam << mes << endl;
+                movesB.pop_back();
+            }
+            //cin >> mat >> luc >> cam >> mes;
+            
+//            cout << "frame3f(vec3f(" << scene->camera->frame.o.x << "," << scene->camera->frame.o.y << "," << scene->camera->frame.o.z << "),";
+//            cout << "vec3f(" << scene->camera->frame.x.x << "," << scene->camera->frame.x.y << "," << scene->camera->frame.x.z << "),";
+//            cout << "vec3f(" << scene->camera->frame.y.x << "," << scene->camera->frame.y.y << "," << scene->camera->frame.y.z << "),";
+//            cout << "vec3f(" << scene->camera->frame.z.x << "," << scene->camera->frame.z.y << "," << scene->camera->frame.z.z << "))" << endl;
+
+            auto scene_diff = new SceneDiff();
+            auto mdiff = new MaterialDiff(scene->meshes[0]->mat,m[mat]);
+            apply_material_change(scene->meshes[0]->mat, mdiff, 0);
+            
+            auto ldiff = new LightDiff(scene->lights[0],l[luc]);
+            apply_light_change(scene->lights[0], ldiff, 0);
+            
+            auto cdiff = new CameraDiff(scene->camera,c[cam]);
+            apply_camera_change(scene->camera, cdiff, 0);
+
+            auto mediff = new MeshDiff(scene->meshes[0],me[mes]);
+            apply_mesh_change(scene->meshes[0], mediff, 0);
+            
+            scene_diff->cameras.push_back(cdiff);
+            scene_diff->lights.push_back(ldiff);
+            scene_diff->meshes.push_back(mediff);
+            scene_diff->materials.push_back(mdiff);
+            
+            client->write(scene_diff);
+            have_msg = false;
         }
-        */
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -640,6 +826,113 @@ void uiloop(editor_client* client) {
     glfwTerminate();
 }
 
+void save_submaterial(const MaterialDiff &m, const char * filename){
+    // make an archive
+    std::ofstream ofs(filename);
+    boost::archive::text_oarchive oa(ofs);
+    oa << m;
+}
+
+void restore_submaterial(MaterialDiff &m, const char * filename)
+{
+    // open the archive
+    std::ifstream ifs(filename);
+    boost::archive::text_iarchive ia(ifs);
+    
+    // restore the submaterial from the archive
+    ia >> m;
+}
+bool is_hidden(const boost::filesystem::path &p)
+{
+    boost::filesystem::path::string_type name = p.filename().string();
+    if(name != ".." &&
+       name != "."  &&
+       name[0] == '.') return true;
+    
+    return false;
+}
+
+bool is_mtl(const boost::filesystem::path &p){
+    string filename = p.filename().string();
+    auto pos = filename.rfind(".");
+    auto ext = (pos == string::npos) ? string() : filename.substr(pos+1);
+    if (ext == "mtl") return true;
+    return false;
+}
+
+bool is_obj(const boost::filesystem::path &p){
+    string filename = p.filename().string();
+    auto pos = filename.rfind(".");
+    auto ext = (pos == string::npos) ? string() : filename.substr(pos+1);
+    if (ext == "obj") return true;
+    return false;
+}
+
+string simple_filename (const boost::filesystem::path &p){
+    string filename = p.filename().string();
+    auto pos = filename.rfind(".");
+    if (pos != string::npos) return filename.substr(0, pos);
+    return filename;
+}
+
+string remove_ext (const boost::filesystem::path &p){
+    string path = p.string();
+    auto pos = path.rfind(".");
+    if (pos != string::npos) return path.substr(0, pos);
+    return path;
+}
+
+void check_dir(editor_client* client){
+    boost::filesystem::path dir( "/Users/gpalozzi/Desktop/test/client" + to_string(client_id) + "/to_send" );
+    boost::posix_time::ptime oldTime( boost::posix_time::second_clock::universal_time() );
+    boost::posix_time::ptime nowTime = oldTime;
+    while(true){
+        if (nowTime > oldTime){
+            boost::filesystem::directory_iterator dirIter( dir ), dirIterEnd;
+            while ( dirIter != dirIterEnd )
+            {
+                if ( boost::filesystem::exists( *dirIter ) and !boost::filesystem::is_directory( *dirIter ) and !is_hidden((*dirIter).path()) )
+                {
+                    std::time_t t = boost::filesystem::last_write_time( *dirIter );
+                    boost::posix_time::ptime lastAccessTime = boost::posix_time::from_time_t(t);
+                    if ( lastAccessTime >= oldTime and lastAccessTime < nowTime )
+                    {
+                        std::cout << "New file: " << (*dirIter).path() << std::endl;
+                        auto mtl = is_mtl((*dirIter).path());
+                        auto obj = is_obj((*dirIter).path());
+                        error_if_not(mtl or obj, "file extension not supported\n");
+                        string path = remove_ext((*dirIter).path());
+                        if(file_upload.find(path) == file_upload.end()) file_upload.emplace(path, make_pair(mtl,obj));
+                        else if(mtl)
+                            file_upload[path].first = mtl;
+                        else if(obj)
+                            file_upload[path].second = obj;
+                        
+                        if(file_upload[path].first and file_upload[path].second){
+                            message("send...\n");
+                            file_upload.erase(path);
+                            client->write(path);
+                        }
+                    }
+                }
+                ++dirIter;
+            }
+            oldTime = nowTime;
+        }
+        else
+            nowTime = boost::posix_time::second_clock::universal_time();
+        
+        if(client->has_pending_mesh()){
+            // get next message
+            auto msg = client->get_next_pending();
+            if (msg->type() == mesh_msg::Obj_Mtl_type){
+                msg->save_files("/Users/gpalozzi/Desktop/test/client" + to_string(client_id) + "/received");
+                message("obj/mtl saved...\n");
+            }
+            client->remove_first();
+        }
+    }
+}
 
 // main function
 int main(int argc, char** argv) {
@@ -654,21 +947,33 @@ int main(int argc, char** argv) {
     args.object_element("image_filename").as_string() :
     scene_filename.substr(0,scene_filename.size()-5)+".png";
     // load scene
-    timing("parse_scene[start]");
-    scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
+//    timing("parse_scene[start]");
+//    scene = load_obj_scene("../scenes/fat_v0.obj");
+//    auto light = new Light();
+//    light->_id_ = 126128947120701270;
+//    light->frame.o = vec3f(2.0,6.0,5.0);
+//    light->intensity = vec3f(25.0,25.0,25.0);
+//    scene->meshes[0]->frame.o = vec3f(-2.0,0.0,-1.0);
+//    scene->lights.push_back(light);
+//    scene->camera = lookat_camera(vec3f(1.0,5.0,4.0), zero3f, y3f, 1.0f, 1.0f, 1.0f,129849216921865, 0);
+
+    scene = load_json_scene("../scenes/shuttleply_v0.json");
+    scene->background = zero3f;
+    //scene->camera->frame = frame3f(vec3f(-1.68528,1.69959,11.5761),vec3f(0.999631,0,-0.0271681),vec3f(-0.00394499,0.989401,-0.145153),vec3f(0.0268802,0.145207,0.989036));
     timing("parse_scene[end]");
     if(not args.object_element("resolution").is_null()) {
         scene->image_height = args.object_element("resolution").as_int();
         scene->image_width = scene->camera->width * scene->image_height / scene->camera->height;
     }
+    
+    
     //subdivide(scene);
     /*
-    auto diff = new SubMesh(scene->meshes[0], scene2->meshes[0]);
+    auto diff = new MeshDiff(scene->meshes[0], scene2->meshes[0]);
     string filename = "../scenes/serialsub";
-    save_submesh(*diff, filename.c_str());
-    
+    save_meshdiff(*diff, filename.c_str());
     SubMesh asd;
-    restore_submesh(asd, filename.c_str());
+    restore_meshdiff(asd, filename.c_str());
     */
     // modify mesh 0
     /*
@@ -707,7 +1012,8 @@ int main(int argc, char** argv) {
             c.write(msg);
         }
         */
-        
+        client_id = atoi(argv[1]);
+        //check_dir(&c);
         uiloop(&c);
 
         c.close();

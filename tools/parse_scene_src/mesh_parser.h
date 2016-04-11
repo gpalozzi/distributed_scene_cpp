@@ -21,7 +21,7 @@ struct stock
 //    friend ostream& operator<<(ostream&, const stock&);
     vector<float> fl = {1.0,2.2,6.6352};
     vector<timestamp_t> _id = {1231234,965195,215421546};
-    map<timestamp_t,int> vertex_id_map = {{124241412,0},{23543666,1},{76543,2},{6585864,3},{3425646,4},{256426,5}};
+    map<timestamp_t,int> vertices = {{124241412,0},{23543666,1},{76543,2},{6585864,3},{3425646,4},{256426,5}};
 };
 
 struct wallet

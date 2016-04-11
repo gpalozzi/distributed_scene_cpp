@@ -4,10 +4,19 @@
 #include "scene_distributed.h"
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/map.hpp>
-
+#include <boost/serialization/set.hpp>
 
 namespace boost {
     namespace serialization {
+        
+        // tuple serialization
+        template<typename Archive, typename T1, typename T2, typename T3>
+        void serialize(Archive & ar, std::tuple<T1,T2,T3>& t, const unsigned int)
+        {
+            ar & std::get<0>(t);
+            ar & std::get<1>(t);
+            ar & std::get<2>(t);
+        }
         
         // vec3f serialization
         template<class Archive>
@@ -142,7 +151,7 @@ namespace boost {
             ar & m.point;
             ar & m.line;
             ar & m.spline;
-            ar & m.vertex_id_map;
+            ar & m.vertices;
             ar & m._id_;
             ar & m._version;
         }
@@ -161,26 +170,72 @@ namespace boost {
             ar & s.image_width;
             ar & s.image_height;
             ar & s.image_samples;
-            ar & s.ids_map;
+            //ar & s.ids_map;
         }
         
-        // submesh serialization
+        // cameradiff serialization
         template<class Archive>
-        void serialize(Archive & ar, SubMesh& sm, const unsigned int version)
+        void serialize(Archive & ar, CameraDiff& cd, const unsigned int version)
         {
-            ar & sm.remove_vertex;
-            ar & sm.remove_edge;
-            ar & sm.remove_triangle;
-            ar & sm.remove_quad;
-            ar & sm.add_vertex;
-            ar & sm.add_edge;
-            ar & sm.add_triangle;
-            ar & sm.add_quad;
-            ar & sm.update_vertex;
-            ar & sm._id_;
-            ar & sm._version;
+            ar & cd.frame;
+            ar & cd.width;
+            ar & cd.height;
+            ar & cd.dist;
+            ar & cd.focus;
+            ar & cd._id_;
+            ar & cd._version;
         }
-
+        
+        // lightdiff serialization
+        template<class Archive>
+        void serialize(Archive & ar, LightDiff& ld, const unsigned int version)
+        {
+            ar & ld.frame;
+            ar & ld.intensity;
+            ar & ld._id_;
+            ar & ld._version;
+        }
+        
+        // materialdiff serialization
+        template<class Archive>
+        void serialize(Archive & ar, MaterialDiff& md, const unsigned int version)
+        {
+            ar & md.ke;
+            ar & md.kd;
+            ar & md.ks;
+            ar & md.n;
+            ar & md.kr;
+            ar & md._id_;
+            ar & md._version;
+        }
+        
+        // meshdiff serialization
+        template<class Archive>
+        void serialize(Archive & ar, MeshDiff& md, const unsigned int version)
+        {
+            ar & md.remove_vertex;
+            ar & md.remove_edge;
+            ar & md.remove_triangle;
+            ar & md.remove_quad;
+            ar & md.add_vertex;
+            ar & md.add_edge;
+            ar & md.add_triangle;
+            ar & md.add_quad;
+            ar & md.update_vertex;
+            ar & md._id_;
+            ar & md._version;
+        }
+        
+        // scenediff serialization
+        template<class Archive>
+        void serialize(Archive & ar, SceneDiff& sd, const unsigned int version)
+        {
+            ar & sd.cameras;
+            ar & sd.lights;
+            ar & sd.materials;
+            ar & sd.meshes;
+            ar & sd._label;
+        }
         
     } // namespace serialization
 } // namespace boost

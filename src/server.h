@@ -73,6 +73,18 @@ public:
         }
     }
     
+    void deliver_all(const mesh_msg& m_msg)
+    {
+        if(m_msg.body_length()){
+            // send mesh to partecipant
+            timing("send_all[start]");
+            for (auto participant: participants_)
+                    participant->deliver_mesh(m_msg);
+            timing("send_all[end]");
+            
+        }
+    }
+    
     void deliver_mesh(const mesh_msg& m_msg, chat_participant_ptr editor)
     {
         if(m_msg.body_length()){
@@ -273,8 +285,14 @@ private:
                                             case 1: // Mesh
                                                 message("mesh recived\n");
                                                 break;
-                                            case 2: // SubMesh
-                                                message("submesh recived\n");
+                                            case 2: // MeshDiff
+                                                message("meshdiff recived\n");
+                                                break;
+                                            case 7: // OBJ - MTL
+                                            {
+                                                message("obj/mtl recived\n");
+                                                error_if_not(read_incoming_mesh_.decode_body(), "error decoding obj/mtl body\n");
+                                            }
                                                 break;
                                             default:
                                                 break;
@@ -393,6 +411,13 @@ public:
     
     void remove_first_mesh(){
         return room_.remove_first_mesh();
+    }
+    
+    template <typename T>
+    void write_all(const T obj)
+    {
+                             auto m_msg = mesh_msg(obj);
+                             room_.deliver_all(m_msg);
     }
     
     void close()

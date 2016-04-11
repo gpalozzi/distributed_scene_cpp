@@ -41,8 +41,8 @@ struct vec2id {
     timestamp_t first; // first id
     timestamp_t second; // second id
     
-    // Default constructor (random ids)
-    vec2id() : first(get_timestamp()), second(get_timestamp()) { }
+    // Default constructor (0 ids)
+    vec2id() : first(0), second(0) { }
     // Element-setting constructor
     vec2id(timestamp_t x, timestamp_t y) : first(x), second(y) { }
     
@@ -63,7 +63,7 @@ struct vec3id {
     timestamp_t third; // third id
     
     // Default constructor (random ids)
-    vec3id() : first(get_timestamp()), second(get_timestamp()), third(get_timestamp()) { }
+    vec3id() : first(0), second(0), third(0) { }
     // Element-setting constructor
     vec3id(timestamp_t x, timestamp_t y, timestamp_t z) : first(x), second(y), third(z) { }
     
@@ -85,7 +85,7 @@ struct vec4id {
     timestamp_t fourth; // fourth id
 
     // Default constructor (random ids)
-    vec4id() : first(get_timestamp()), second(get_timestamp()), third(get_timestamp()), fourth(get_timestamp()) { }
+    vec4id() : first(0), second(0), third(0), fourth(0) { }
     // Element-setting constructor
     vec4id(timestamp_t x, timestamp_t y, timestamp_t z, timestamp_t w) : first(x), second(y), third(z), fourth(w) { }
     
@@ -97,6 +97,13 @@ struct vec4id {
 
 // 4ids equality  -----------------------
 inline bool operator==(const vec4id& a, const vec4id& b) { return a.first==b.first and a.second==b.second and a.third==b.third and a.fourth==b.fourth; }
+
+
+// id Constants -------------------------------
+// zero
+const vec2id zero2id = vec2id(0, 0);
+const vec3id zero3id = vec3id(0, 0, 0);
+const vec4id zero4id = vec4id(0, 0, 0, 0);
 
 
 // find in vector  -----------------------
@@ -234,6 +241,11 @@ const vec3f one3f = vec3f(1, 1, 1);
 const vec3f x3f = vec3f(1, 0, 0);
 const vec3f y3f = vec3f(0, 1, 0);
 const vec3f z3f = vec3f(0, 0, 1);
+// NaN
+const vec3f nan3f = vec3f(nanf(""),nanf(""),nanf(""));
+
+// NaN check
+inline bool isnan(const vec3f& a){ return isnan(a.x) and isnan(a.y) and isnan(a.z); }
 
 // 3d component-wise equality  -----------------------
 inline bool operator==(const vec3f& a, const vec3f& b) { return a.x==b.x and a.y==b.y and a.z==b.z; }
@@ -398,6 +410,9 @@ struct vec2i {
 const vec2i zero2i = vec2i(0, 0);
 // one
 const vec2i one2i = vec2i(1, 1);
+// -one
+const vec2i none2i = vec2i(-1, -1);
+
 
 // 2d component-wise equality  -----------------------
 inline bool operator==(const vec2i& a, const vec2i& b) { return a.x==b.x and a.y==b.y; }
@@ -458,6 +473,8 @@ struct vec3i {
 const vec3i zero3i = vec3i(0, 0, 0);
 // one
 const vec3i one3i = vec3i(1, 1, 1);
+// -one
+const vec3i none3i = vec3i(-1, -1, -1);
 
 // 3d component-wise equality  -----------------------
 inline bool operator==(const vec3i& a, const vec3i& b) { return a.x==b.x and a.y==b.y and a.z==b.z; }
@@ -521,6 +538,8 @@ struct vec4i {
 const vec4i zero4i = vec4i(0, 0, 0, 0);
 // one
 const vec4i one4i = vec4i(1, 1, 1, 1);
+// one
+const vec4i none4i = vec4i(-1, -1, -1, -1);
 
 // 4d component-wise equality  -----------------------
 inline bool operator==(const vec4i& a, const vec4i& b) { return a.x==b.x and a.y==b.y and a.z==b.z and a.w==b.w; }
@@ -571,6 +590,13 @@ struct frame3f {
     // element-setting constructor
     explicit frame3f(const vec3f& o, const vec3f& x, const vec3f& y, const vec3f& z) : o(o), x(x), y(y), z(z) { }
 };
+
+// 4d coordinate frame Constants -------------------------------
+// NaN
+const frame3f nanframe3f = frame3f(nan3f,nan3f,nan3f,nan3f);
+
+// NaN check
+inline bool isnan(const frame3f& a){ return isnan(a.o) and isnan(a.x) and isnan(a.y) and isnan(a.z); }
 
 
 // frames constants ----------------------------------

@@ -1,0 +1,37 @@
+TO DO:
+- command helper
+- merge op_message with mesh_message
+    - merge write function for client & server
+    - remove data_ from mesh_message
+
+Timing message:
+- build scene
+    parse_scene[start]
+    parse_scene[end]
+- send diff
+    deserialize_mesh[start]
+    deserialize_mesh[end]
+    apply_diff[start]
+    apply_diff[end]
+    send_mesh[start]
+    send_mesh[end]
+- receive diff
+    recive_mesh[start]
+    recive_mesh[end]
+    deserialize_from_msg[start]
+    deserialize_from_msg[end]
+    apply_diff[start]
+    apply_diff[end]
+- server dispatch diff
+    parse_scene[start]
+    parse_scene[end]
+    recive_mesh[start]
+    recive_mesh[end]
+    send_all[start]
+    send_all[end]
+    send_client[start]
+    send_client[end]
+    deserialize_from_msg[start]
+    deserialize_from_msg[end]
+    apply_diff[start]
+    apply_diff[end]

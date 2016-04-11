@@ -69,27 +69,94 @@ vector<image3f*> get_textures(Scene* scene) {
 }
 
 map<timestamp_t,Mesh*> mesh_history;
-map<timestamp_t,SubMesh*> submesh_history;
+map<timestamp_t,MeshDiff*> meshdiff_history;
+map<timestamp_t,CameraDiff*> cameradiff_history;
+map<timestamp_t,LightDiff*> lightdiff_history;
+map<timestamp_t,MaterialDiff*> materialdiff_history;
+vector<pair<timestamp_t,SceneDiff*>> scenediff_history;
+vector<pair<timestamp_t,SceneDiff*>> scenediff_history_reverse;
+timestamp_t global_scene_version = 0; // 0 is base version
 
-Mesh* get_mesh_to_restrore(){
-    vector<timestamp_t> choices;
-    int choice = 1;
-    message("mesh history\n");
-    for(auto m : mesh_history){
-        message("[%d] %llu\n",choice++,m.first);
-        choices.push_back(m.first);
+timestamp_t get_global_version(){
+    return global_scene_version;
+}
+
+void restore_backward(Scene* scene, int previous, int current){
+    for (auto i = current; i >= previous; i--)
+        apply_change(scene, scenediff_history_reverse[i].second, 0);
+    
+    if (previous == 0) global_scene_version = 0;
+    else global_scene_version = scenediff_history_reverse[previous-1].first;
+}
+
+void restore_forward(Scene* scene, int succ, int current){
+    for (auto i = current; i <= succ; i++)
+        apply_change(scene, scenediff_history[i].second, 0);
+    
+    global_scene_version = scenediff_history[succ].first;
+}
+
+void restore_to_version(Scene* scene, timestamp_t version){
+    int current = -2, to = -2, i = scenediff_history_reverse.size()-1;
+    if(global_scene_version == 0) current = -1;
+    if(version == 0) to = -1;
+    while (i >= 0 and (current == -2 or to == -2)) {
+        if (current == -2 and scenediff_history_reverse[i].first == global_scene_version) current = i;
+        if (to == -2 and scenediff_history_reverse[i].first == version) to = i;
+        i--;
     }
-    message("Mesh to restore (0 = exit): ");
-    choice = 0;
-    std::cin >> choice;
-    if (choice > 0 && choice <= mesh_history.size()) return mesh_history[choices[choice-1]];
-    return nullptr;
+    
+    error_if_not(current != -2 and to != -2, "error in restore_to_version, can't find version\n");
+    
+    if (current > to){
+        // undo
+        restore_backward(scene, to+1, current);
+
+    }
+    else if(current < to){
+        // redo
+        restore_forward(scene, to, current+1);
+    }
+    else if (to == current) message("You already are in the version\n");
+
+}
+
+timestamp_t restore_version(Scene* scene){
+    cout << "[0] base version";
+    if (global_scene_version == 0) cout << " <- current";
+    cout << endl;
+
+    int choice = 0, current = 0;
+    for(; choice < scenediff_history.size(); choice++){
+        cout << "[" << choice+1 << "] " << scenediff_history[choice].first;
+        if (scenediff_history[choice].first == global_scene_version){
+            cout << " <- current";
+            current = choice+1;
+        }
+        cout << endl;
+    }
+    message("Version to restore:\n");
+    cin >> choice;
+    
+    if (choice < current and choice > -1) {
+        // undo
+        restore_backward(scene, choice, current-1);
+    }
+    else if (choice > current and choice <= scenediff_history.size()){
+        // redo
+        restore_forward(scene, choice-1, current);
+    }
+    else if (choice == current){ message("You are in the current version\n");
+    }
+    
+    return global_scene_version;
 }
 
 
-Camera* lookat_camera(vec3f eye, vec3f center, vec3f up, float width, float height, float dist, timestamp_t id) {
+Camera* lookat_camera(vec3f eye, vec3f center, vec3f up, float width, float height, float dist, timestamp_t id, int version) {
     auto camera = new Camera();
     camera->_id_ = id;
+    camera->_version = version;
     camera->frame = lookat_frame(eye, center, up, true);
     camera->width = width;
     camera->height = height;
@@ -173,6 +240,7 @@ void json_set_value(const jsonvalue& json, frame3f& value) {
         value = orthonormalize_zyx(value);
     }
 }
+
 void json_set_value(const jsonvalue& json, vector<vector<mat4f>>& value) {
     value.resize(json.array_size());
     for(auto i : range(value.size())) json_set_value(json.array_element(i), value[i]);
@@ -194,6 +262,7 @@ void add_reference(T& value, const jsonvalue& json) {
 Camera* json_parse_camera(const jsonvalue& json) {
     auto camera = new Camera();
     json_set_optvalue(json, camera->_id_, "_id_");
+    json_set_optvalue(json, camera->_version, "version");
     if(json.object_contains("frame_from") or json.object_contains("frame_to") or json.object_contains("frame_up")) {
         auto from = z3f, to = zero3f, up = y3f;
         json_set_optvalue(json, from, "frame_from");
@@ -218,14 +287,16 @@ Camera* json_parse_lookatcamera(const jsonvalue& json) {
     auto from = z3f, to = zero3f, up = y3f;
     auto width = 1.0f, height = 1.0f, dist = 1.0f;
     timestamp_t id = 0;
+    int version = 0;
     json_set_optvalue(json, id, "_id_");
+    json_set_optvalue(json, version, "version");
     json_set_optvalue(json, from, "from");
     json_set_optvalue(json, to, "to");
     json_set_optvalue(json, up, "up");
     json_set_optvalue(json, width, "width");
     json_set_optvalue(json, height, "height");
     json_set_optvalue(json, dist, "dist");
-    return lookat_camera(from, to, up, width, height, dist, id);
+    return lookat_camera(from, to, up, width, height, dist, id, version);
 }
 
 vector<string>          json_texture_paths;
@@ -261,6 +332,7 @@ void json_parse_opttexture(jsonvalue json, image3f*& txt, string name) {
 Material* json_parse_material(const jsonvalue& json) {
     auto material = new Material();
     json_set_optvalue(json, material->_id_, "_id_");
+    json_set_optvalue(json, material->_version, "version");
     json_set_optvalue(json, material->ke, "ke");
     json_set_optvalue(json, material->kd, "kd");
     json_set_optvalue(json, material->ks, "ks");
@@ -398,107 +470,103 @@ void init_mesh_properties_from_array(Mesh* mesh){
 };
 */
 
-void init_mesh_properties_from_map(Mesh* mesh, bool force_quad_update, bool force_triangle_update, bool force_edges_update, bool force_norm_update){
-    auto quad_indices = mesh->quad_index.empty() or force_quad_update;
-    auto triangle_indices = mesh->triangle_index.empty() or force_triangle_update;
-    auto edges_indices = mesh->edge_index.empty() or force_edges_update;
-    auto norm = mesh->norm.empty() or force_norm_update;
-    
-    // clear previous vector
-    if (force_quad_update) mesh->quad_index.clear();
-    if (force_triangle_update) mesh->triangle_index.clear();
-    if (force_edges_update) mesh->edge_index.clear();
-    if (force_norm_update) mesh->norm.clear();
-
-    vector<int> faces_per_vert;
-    
-    if (norm) {
-        faces_per_vert = vector<int>(mesh->pos.size(),0);
-        mesh->norm = vector<vec3f>(mesh->pos.size(),zero3f);
-    }
-    
-    if (norm or quad_indices) {
-        // for each quad
-        for(auto quad : mesh->quad){
-            // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[quad.second];
-            auto b = mesh->vertex_id_map[quad.second];
-            auto c = mesh->vertex_id_map[quad.second];
-            auto d = mesh->vertex_id_map[quad.second];
-            
-            // put this 4 indices in vector
-            if (quad_indices) mesh->quad_index.push_back({a,b,c,d});
-            
-            // compute normals
-            if (norm){
-                // face normal
-                auto n = normalize(normalize(cross(mesh->pos[b]-mesh->pos[a], mesh->pos[c]-mesh->pos[a])) +
-                                   normalize(cross(mesh->pos[c]-mesh->pos[a], mesh->pos[d]-mesh->pos[a])));
-                // add to previous normals
-                mesh->norm[a] += n; mesh->norm[b] += n; mesh->norm[c] += n; mesh->norm[d] += n;
-                // increment number of faces involeved in computatation for normal
-                faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++; faces_per_vert[d]++;
-            }
-        }
-    }
-    if (norm or triangle_indices) {
-        // for each triangle
-        for(auto triangle : mesh->triangle){
-            // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[triangle.second.first];
-            auto b = mesh->vertex_id_map[triangle.second.second];
-            auto c = mesh->vertex_id_map[triangle.second.third];
-            
-            // put this 3 indices in vector
-            if (triangle_indices) mesh->triangle_index.push_back({a,b,c});
-            
-            // compute normals
-            if (norm){
-                // face normal
-                auto n = normalize(cross(mesh->pos[b]-mesh->pos[a], mesh->pos[c]-mesh->pos[a]));
-                // add to previous normals
-                mesh->norm[a] += n; mesh->norm[b] += n; mesh->norm[c] += n;
-                // increment number of faces involeved in computatation for normal
-                faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++;
-            }
-        }
-    }
-    // apply mean to normals
-    if(norm){
-        for(auto i : range(mesh->norm.size()) ){ if(auto mean = faces_per_vert[i]) mesh->norm[i] /= mean; }
-        // delete
-        faces_per_vert.clear();
-    }
-    if (edges_indices) {
-        // for each edge
-        for(auto edge : mesh->edge){
-            // for each vertex find the id in vertices vector and get the index
-            auto a = mesh->vertex_id_map[edge.second.first];
-            auto b = mesh->vertex_id_map[edge.second.second];
-            
-            // put this 2 indices in vector
-            mesh->edge_index.push_back({a,b});
-        }
-    }    
-}
+//void init_mesh_properties_from_map(Mesh* mesh, bool force_quad_update, bool force_triangle_update, bool force_edges_update, bool force_norm_update){
+//    auto quad_indices = mesh->quad_index.empty() or force_quad_update;
+//    auto triangle_indices = mesh->triangle_index.empty() or force_triangle_update;
+//    auto edges_indices = mesh->edge_index.empty() or force_edges_update;
+//    auto norm = mesh->norm.empty() or force_norm_update;
+//    
+//    // clear previous vector
+//    if (force_quad_update) mesh->quad_index.clear();
+//    if (force_triangle_update) mesh->triangle_index.clear();
+//    if (force_edges_update) mesh->edge_index.clear();
+//    if (force_norm_update) mesh->norm.clear();
+//
+//    vector<int> faces_per_vert;
+//    
+//    if (norm) {
+//        faces_per_vert = vector<int>(mesh->pos.size(),0);
+//        mesh->norm = vector<vec3f>(mesh->pos.size(),zero3f);
+//    }
+//    
+//    if (norm or quad_indices) {
+//        // for each quad
+//        for(auto quad : mesh->quad){
+//            // for each vertex find the id in vertices vector and get the index
+//            auto a = mesh->vertices[quad.second];
+//            auto b = mesh->vertices[quad.second];
+//            auto c = mesh->vertices[quad.second];
+//            auto d = mesh->vertices[quad.second];
+//            
+//            // put this 4 indices in vector
+//            if (quad_indices) mesh->quad_index.push_back({a,b,c,d});
+//            
+//            // compute normals
+//            if (norm){
+//                // face normal
+//                auto n = normalize(normalize(cross(mesh->pos[b]-mesh->pos[a], mesh->pos[c]-mesh->pos[a])) +
+//                                   normalize(cross(mesh->pos[c]-mesh->pos[a], mesh->pos[d]-mesh->pos[a])));
+//                // add to previous normals
+//                mesh->norm[a] += n; mesh->norm[b] += n; mesh->norm[c] += n; mesh->norm[d] += n;
+//                // increment number of faces involeved in computatation for normal
+//                faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++; faces_per_vert[d]++;
+//            }
+//        }
+//    }
+//    if (norm or triangle_indices) {
+//        // for each triangle
+//        for(auto triangle : mesh->triangle){
+//            // for each vertex find the id in vertices vector and get the index
+//            auto a = mesh->vertices[triangle.second.first];
+//            auto b = mesh->vertices[triangle.second.second];
+//            auto c = mesh->vertices[triangle.second.third];
+//            
+//            // put this 3 indices in vector
+//            if (triangle_indices) mesh->triangle_index.push_back({a,b,c});
+//            
+//            // compute normals
+//            if (norm){
+//                // face normal
+//                auto n = normalize(cross(mesh->pos[b]-mesh->pos[a], mesh->pos[c]-mesh->pos[a]));
+//                // add to previous normals
+//                mesh->norm[a] += n; mesh->norm[b] += n; mesh->norm[c] += n;
+//                // increment number of faces involeved in computatation for normal
+//                faces_per_vert[a]++; faces_per_vert[b]++; faces_per_vert[c]++;
+//            }
+//        }
+//    }
+//    // apply mean to normals
+//    if(norm){
+//        for(auto i : range(mesh->norm.size()) ){ if(auto mean = faces_per_vert[i]) mesh->norm[i] /= mean; }
+//        // delete
+//        faces_per_vert.clear();
+//    }
+//    if (edges_indices) {
+//        // for each edge
+//        for(auto edge : mesh->edge){
+//            // for each vertex find the id in vertices vector and get the index
+//            auto a = mesh->vertices[edge.second.first];
+//            auto b = mesh->vertices[edge.second.second];
+//            
+//            // put this 2 indices in vector
+//            mesh->edge_index.push_back({a,b});
+//        }
+//    }    
+//}
 
 void indexing_vertex_position(Mesh* mesh){
     vector<vec3f> temp = mesh->pos;
-    vector<vec3f> temp_norm;
-    // if normal per vertex are already computed
-    if (not mesh->norm.empty()){
-        temp_norm = mesh->norm;
-        mesh->norm.clear();
-    }
+    vector<vec3f> temp_norm = mesh->norm;
     mesh->pos.clear();
-    for (auto& vertex : mesh->vertex_id_map){
-        // move vertex norm if needed
-        if (not mesh->norm.empty()) mesh->norm.push_back(temp_norm[vertex.second.first]);
+    mesh->norm.clear();
+    
+    for (auto& vertex : mesh->vertices){
+        // move normal if needed
+        if (not temp_norm.empty()) mesh->norm.push_back(temp_norm[vertex.second.first]);
+        else mesh->norm.push_back(zero3f);
         // move vertex position
-//        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
         mesh->pos.push_back(temp[vertex.second.first]);
         vertex.second.first = mesh->pos.size()-1;
-        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
     }
     temp_norm.clear();
     temp.clear();
@@ -509,10 +577,8 @@ void indexing_triangle_position(Mesh* mesh){
     mesh->triangle_index.clear();
     for (auto& triangle : mesh->triangle){
         // move index position
-        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
         mesh->triangle_index.push_back(temp[get<0>(triangle.second)]);
         get<0>(triangle.second) = mesh->triangle_index.size()-1;
-        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
     }
     temp.clear();
 }
@@ -522,10 +588,8 @@ void indexing_quad_position(Mesh* mesh){
     mesh->quad_index.clear();
     for (auto& quad : mesh->quad){
         // move index position
-        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
         mesh->quad_index.push_back(temp[get<0>(quad.second)]);
         get<0>(quad.second) = mesh->quad_index.size()-1;
-        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
     }
     temp.clear();
 }
@@ -535,10 +599,8 @@ void indexing_edge_position(Mesh* mesh){
     mesh->edge_index.clear();
     for (auto& edge : mesh->edge){
         // move index position
-        //        mesh->pos.push_back(temp[vertex.second]);           edit after vertex_id_map type change
         mesh->edge_index.push_back(temp[get<0>(edge.second)]);
         get<0>(edge.second) = mesh->edge_index.size()-1;
-        //vertex.second = mesh->pos.size()-1;                edit after vertex_id_map type change
     }
     temp.clear();
 }
@@ -547,6 +609,7 @@ void indexing_edge_position(Mesh* mesh){
 Mesh* json_parse_mesh(const jsonvalue& json) {
     auto mesh = new Mesh();
     json_set_optvalue(json, mesh->_id_, "_id_");
+    json_set_optvalue(json, mesh->_version, "version");
     if(json.object_contains("json_mesh")) {
         json_texture_path_push(json.object_element("json_mesh").as_string());
         mesh = json_parse_mesh(load_json(json.object_element("json_mesh").as_string()));
@@ -569,14 +632,15 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
     // vertex
     if (json.object_contains("vertex")) {
         auto vertex_array = json.object_element("vertex");
+
         for (auto& vertex : vertex_array.as_array_ref()) {
             timestamp_t _id = 0;
             json_set_optvalue(vertex, _id, "_id_");
             auto v = vec3f();
             json_set_optvalue(vertex, v, "pos");
             //use map
-            //mesh->vertex_id_map.emplace(_id,mesh->pos.size());
-            mesh->vertex_id_map.emplace(_id, make_pair(mesh->pos.size(),vector<timestamp_t>() ));
+            //mesh->vertices.emplace(_id,mesh->pos.size());
+            mesh->vertices.emplace(_id, make_pair(mesh->pos.size(),set<timestamp_t>() ));
             // use array [deprecated]
             //mesh->vertex_ids.push_back(_id);
             mesh->pos.push_back(v);
@@ -585,7 +649,7 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
         indexing_vertex_position(mesh);
     }
     
-    // triangle
+    // triangles
     if (json.object_contains("triangle")) {
         auto triangle_array = json.object_element("triangle");
         for (auto& triangle : triangle_array.as_array_ref()) {
@@ -596,13 +660,13 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             //mesh->triangle_ids.push_back(_id);
             //mesh->triangle.push_back(v);
             // find indices position
-            auto& a = mesh->vertex_id_map[v.first];
-            auto& b = mesh->vertex_id_map[v.second];
-            auto& c = mesh->vertex_id_map[v.third];
+            auto& a = mesh->vertices[v.first];
+            auto& b = mesh->vertices[v.second];
+            auto& c = mesh->vertices[v.third];
             // insert this id in vertex adiacencis
-            a.second.push_back(_id);
-            b.second.push_back(_id);
-            c.second.push_back(_id);
+            a.second.insert(_id);
+            b.second.insert(_id);
+            c.second.insert(_id);
             // compute normal
             auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
             // add normal to vertex normal
@@ -617,7 +681,7 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
         indexing_triangle_position(mesh);
     }
     
-    // quad
+    // quads
     if (json.object_contains("quad")) {
         auto quad_array = json.object_element("quad");
         for (auto& quad : quad_array.as_array_ref()) {
@@ -628,15 +692,15 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             //mesh->quad_ids.push_back(_id);
             //mesh->quad.push_back(v);
             // find indices position
-            auto& a = mesh->vertex_id_map[v.first];
-            auto& b = mesh->vertex_id_map[v.second];
-            auto& c = mesh->vertex_id_map[v.third];
-            auto& d = mesh->vertex_id_map[v.fourth];
+            auto& a = mesh->vertices[v.first];
+            auto& b = mesh->vertices[v.second];
+            auto& c = mesh->vertices[v.third];
+            auto& d = mesh->vertices[v.fourth];
             // insert this id in vertex adiacencis
-            a.second.push_back(_id);
-            b.second.push_back(_id);
-            c.second.push_back(_id);
-            d.second.push_back(_id);
+            a.second.insert(_id);
+            b.second.insert(_id);
+            c.second.insert(_id);
+            d.second.insert(_id);
             // compute normal
             auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
                                normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
@@ -645,7 +709,7 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             mesh->norm[b.first] += n;
             mesh->norm[c.first] += n;
             mesh->norm[d.first] += n;
-            // build triangle structure
+            // build quad structure
             mesh->quad.emplace(_id,make_tuple(mesh->quad_index.size(),v,n));
             mesh->quad_index.push_back({a.first,b.first,c.first,d.first});
         }
@@ -653,7 +717,7 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
         indexing_quad_position(mesh);
     }
     // apply mean to normals
-    for (auto v : mesh->vertex_id_map) {
+    for (auto v : mesh->vertices) {
         if(auto mean = v.second.second.size()) mesh->norm[v.second.first] /= mean;
             
     }
@@ -669,12 +733,9 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
             //mesh->edge_ids.push_back(_id);
             //mesh->edge.push_back(v);
             // find indices position
-            auto& a = mesh->vertex_id_map[v.first];
-            auto& b = mesh->vertex_id_map[v.second];
-            // insert this id in vertex adiacencis
-            a.second.push_back(_id);
-            b.second.push_back(_id);
-            // build triangle structure
+            auto& a = mesh->vertices[v.first];
+            auto& b = mesh->vertices[v.second];
+            // build edge structure
             mesh->edge.emplace(_id,make_pair(mesh->edge_index.size(),v));
             mesh->edge_index.push_back({a.first,b.first});
         }
@@ -685,8 +746,7 @@ Mesh* json_parse_mesh(const jsonvalue& json) {
     //if(json.object_contains("norm")) json_set_optvalue(json, mesh->norm, "norm");
     //if(json.object_contains("quad_index")) json_set_optvalue(json, mesh->quad_index, "quad_index");
     
-    init_mesh_properties_from_map(mesh, false, false, false, false);
-    json_set_optvalue(json, mesh->_version, "version");
+    //init_mesh_properties_from_map(mesh, false, false, false, false);
 
     /*
     json_set_optvalue(json, mesh->pos, "pos");
@@ -725,6 +785,7 @@ vector<Mesh*> json_parse_meshes(const jsonvalue& json) {
 Light* json_parse_light(const jsonvalue& json) {
     auto light = new Light();
     json_set_optvalue(json, light->_id_, "_id_");
+    json_set_optvalue(json, light->_version, "version");
     if(json.object_contains("frame_from") or json.object_contains("frame_to") or json.object_contains("frame_up")) {
         auto from = z3f, to = zero3f, up = y3f;
         json_set_optvalue(json, from, "frame_from");
@@ -780,290 +841,1256 @@ void solve_references(Scene* scene){
     }
 }
 
+MeshDiff* meshdiff_assume_ordered( Mesh* first_mesh, Mesh* second_mesh){
+    auto mesh_diff = new MeshDiff();
+    
+    if ( not (first_mesh->vertices.size() == first_mesh->pos.size()) ) indexing_vertex_position(first_mesh);
+    
+    // vertices diff
+    auto size_min = min(first_mesh->pos.size(),second_mesh->pos.size());
+    auto size_max = max(first_mesh->pos.size(),second_mesh->pos.size());
+    unsigned long i = 0;
+    // check updated vertices
+    for (;i < size_min; i++){
+        if(!(first_mesh->pos[i] == second_mesh->pos[i]))
+            mesh_diff->update_vertex.emplace(i+1,second_mesh->pos[i]); // vertex changed
+        if(!(first_mesh->norm[i] == second_mesh->norm[i]))
+            mesh_diff->update_norm.emplace(i+1,second_mesh->norm[i]); // norm changed
+    }
+    
+    if (first_mesh->pos.size() > second_mesh->pos.size()){
+        // removed vertices
+        for (; i < size_max; i++){
+            mesh_diff->remove_vertex.push_back(i+1);
+        }
+    }
+    if (first_mesh->pos.size() > second_mesh->pos.size()){
+        // added vertices
+        for (; i < size_max; i++){
+            mesh_diff->add_vertex.emplace(i+1, second_mesh->pos[i]);
+            mesh_diff->add_norm.emplace(i+1, second_mesh->norm[i]);
+        }
+    }
+    
+    // faces diff
+    //// triangles
+    bool first_bigger = first_mesh->triangle.size() >= second_mesh->triangle.size();
+    
+    auto it1 = first_mesh->triangle.begin();
+    auto it2 = second_mesh->triangle.begin();
+    
+    if (not first_bigger){
+        while (it1 != first_mesh->triangle.end())
+        {
+            if ( not (get<1>(it1->second) == get<1>(it2->second)) ) {
+                mesh_diff->remove_triangle.push_back(it1->first);   // remove trinagle
+                mesh_diff->add_triangle.emplace(it2->first, get<1>(it2->second)); // add triangle
+            }
+            ++it1;
+            ++it2;
+        }
+        // add remaining trinagle
+        while (it2 != second_mesh->triangle.end()) {
+            mesh_diff->add_triangle.emplace(it2->first, get<1>(it2->second)); // add triangle
+            ++it2;
+        }
+
+    }
+    else {
+        while (it2 != second_mesh->triangle.end())
+        {
+            if ( not (get<1>(it1->second) == get<1>(it2->second)) ) {
+                mesh_diff->remove_triangle.push_back(it1->first);   // remove trinagle
+                mesh_diff->add_triangle.emplace(it2->first, get<1>(it2->second)); // add triangle
+            }
+            ++it1;
+            ++it2;
+        }
+        // remove remaining trinagle
+        while (it1 != first_mesh->triangle.end()) {
+            mesh_diff->remove_triangle.push_back(it1->first); // remove triangle
+            ++it1;
+        }
+    }
+
+    //// quads
+
+    first_bigger = first_mesh->quad.size() >= second_mesh->quad.size();
+    
+    auto qit1 = first_mesh->quad.begin();
+    auto qit2 = second_mesh->quad.begin();
+    
+    if (not first_bigger){
+        while (qit1 != first_mesh->quad.end())
+        {
+            if ( not (get<1>(qit1->second) == get<1>(qit2->second)) ) {
+                mesh_diff->remove_quad.push_back(qit1->first);   // remove quad
+                mesh_diff->add_quad.emplace(qit2->first, get<1>(qit2->second)); // add quad
+            }
+            ++qit1;
+            ++qit2;
+        }
+        // add remaining quad
+        while (qit2 != second_mesh->quad.end()) {
+            mesh_diff->add_quad.emplace(qit2->first, get<1>(qit2->second)); // add quad
+            ++qit2;
+        }
+        
+    }
+    else {
+        while (qit2 != second_mesh->quad.end())
+        {
+            if ( not (get<1>(qit1->second) == get<1>(qit2->second)) ) {
+                mesh_diff->remove_quad.push_back(qit1->first);   // remove quad
+                mesh_diff->add_quad.emplace(qit2->first, get<1>(qit2->second)); // add quad
+            }
+            ++qit1;
+            ++qit2;
+        }
+        // remove remaining quad
+        while (qit1 != first_mesh->quad.end()) {
+            mesh_diff->remove_quad.push_back(qit1->first); // remove quad
+            ++qit1;
+        }
+    }
+
+    return mesh_diff;
+}
+
+// new version
 // applay vertex creation, elimination and update on a mesh.
 // It updates also all other structure in a mesh (edges & faces)
-void apply_changes_range(Mesh* mesh, SubMesh* submesh, bool save_history){
+void obj_apply_mesh_change(Mesh* mesh, MeshDiff* meshdiff, timestamp_t save_history){
+    
+    auto vs = mesh->vertices.size();
+    auto ts = mesh->triangle.size();
+    auto qs = mesh->quad.size();
+    auto es = mesh->edge.size();
+    
+    if ( not (mesh->vertices.size() == mesh->pos.size()) ) indexing_vertex_position(mesh);
+    
     timing_apply("save_history[start]");
     if (save_history) {
-        auto clone = new SubMesh(*submesh);
-        submesh_history.emplace(get_timestamp(),clone);
+        auto clone = new MeshDiff(*meshdiff);
+        meshdiff_history.emplace(save_history,clone);
     }
     timing_apply("save_history[end]");
     
-    auto need_update_pos_faces = not submesh->remove_vertex.empty();
     
-    timing_apply("add_vertex[start]");
-    // add new vertex
-    for (auto v : submesh->add_vertex){
-        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
-        mesh->pos.push_back(v.second);
-        mesh->norm.push_back(zero3f);
-    }
+    // remove
     
-    timing_apply("add_vertex[end]");
-    timing_apply("update_vertex[start]");
-    // update existing vertex
-    for (auto v : submesh->update_vertex) mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
-    timing_apply("update_vertex[end]");
-    timing_apply("delete_vertex[start]");
-    // vertex delete
-    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);
-    timing_apply("delete_vertex[end]");
-    timing_apply("init_position[start]");
-    // restore vertex position indexing
-    if(need_update_pos_faces) indexing_vertex_position(mesh);
-    timing_apply("init_position[end]");
     timing_apply("remove_edges[start]");
     // remove edges
-    for (auto edge : submesh->remove_edge){
-        /*
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
-         mesh->edge_index.erase(mesh->edge_index.begin()+index);
-         }
-         */
+    for (auto edge : meshdiff->remove_edge){
+        // set index to -1
+        mesh->edge_index[mesh->edge[edge].first] = none2i;
+        // remove edge
         mesh->edge.erase(edge);
     }
+    
+    if(mesh->edge.size() != es - meshdiff->remove_edge.size()){
+        message("error 4\n");
+    }
+    else
+        es -= meshdiff->remove_edge.size();
+    
     timing_apply("remove_edges[end]");
     timing_apply("remove_triangle[start]");
     // remove triangles
-    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
+    for (auto triangle : meshdiff->remove_triangle){
+        auto t = mesh->triangle[triangle];
+        //update vertex adjacency
+        auto& a = mesh->vertices[get<1>(t).first];
+        auto& b = mesh->vertices[get<1>(t).second];
+        auto& c = mesh->vertices[get<1>(t).third];
+        
+        if (a.second.size()) a.second.erase(triangle);
+        if (b.second.size()) b.second.erase(triangle);
+        if (c.second.size()) c.second.erase(triangle);
+        
+        // set index to -1
+        //mesh->triangle_index[get<0>(t)] = zero3i;
+        mesh->triangle_index[get<0>(t)] = none3i;
+        // remove triangle
+        mesh->triangle.erase(triangle);
+    }
+    
+    if(mesh->triangle.size() != ts - meshdiff->remove_triangle.size()){
+        message("error 5\n");
+    }
+    else
+        ts -= meshdiff->remove_triangle.size();
+    
     timing_apply("remove_triangle[end]");
     timing_apply("remove_quad[start]");
     // remove quads
-    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
+    for (auto quad : meshdiff->remove_quad){
+        auto q = mesh->quad[quad];
+        //update vertex normal
+        auto& a = mesh->vertices[get<1>(q).first];
+        auto& b = mesh->vertices[get<1>(q).second];
+        auto& c = mesh->vertices[get<1>(q).third];
+        auto& d = mesh->vertices[get<1>(q).fourth];
+        
+        if (a.second.size()) a.second.erase(quad);
+        if (b.second.size()) b.second.erase(quad);
+        if (c.second.size()) c.second.erase(quad);
+        if (d.second.size()) d.second.erase(quad);
+        
+        // set index to -1
+        mesh->quad_index[get<0>(q)] = none4i;
+        // remove quad
+        mesh->quad.erase(quad);
+    }
+    if(mesh->quad.size() != qs - meshdiff->remove_quad.size()){
+        message("error 6\n");
+    }
+    else
+        qs -= meshdiff->remove_quad.size();
+    
+    
     timing_apply("remove_quad[end]");
+    
+    timing_apply("delete_vertex[start]");
+    // vertex delete
+    for (auto v : meshdiff->remove_vertex){
+        mesh->vertices.erase(v);
+        if(mesh->vertices.find(v) != mesh->vertices.end()){
+            message("error 7.1: %llu found!!!\n", v);
+        }
+        
+    }
+    
+    if(mesh->vertices.size() != vs - meshdiff->remove_vertex.size()){
+        message("error 7\n");
+    }
+    else
+        vs -= meshdiff->add_vertex.size();
+    
+    
+    timing_apply("delete_vertex[end]");
+
+
+    
+    // update
+    
+    timing_apply("update_vertex[start]");
+    // update existing vertex
+    for (auto v : meshdiff->update_vertex) mesh->pos[mesh->vertices[v.first].first] = v.second;
+    
+    // update existing normal
+    for (auto n : meshdiff->update_norm) mesh->norm[mesh->vertices[n.first].first] = n.second;
+
+    if(mesh->vertices.size() != vs){
+        message("error 3\n");
+    }
+    
+    timing_apply("update_vertex[end]");
+
+    
+    // add
+    
+    timing_apply("add_vertex[start]");
+    // add new vertex
+    for (auto v : meshdiff->add_vertex){
+        if(mesh->vertices.find(v.first) != mesh->vertices.end()){
+            message("error 1.1: %llu found!!!\n", v.first);
+        }
+        mesh->vertices.emplace(v.first, make_pair(mesh->pos.size(),set<timestamp_t>() ));
+        mesh->pos.push_back(v.second);
+    }
+    timing_apply("add_vertex[end]");
+    
+    if(mesh->vertices.size() != vs + meshdiff->add_vertex.size()){
+        message("error 1: %d != %d + %d\n", mesh->vertices.size() , vs , meshdiff->add_vertex.size());
+    }
+    else
+        vs += meshdiff->add_vertex.size();
+    
+    timing_apply("add_norm[start]");
+
+    for (auto v : meshdiff->add_norm){
+        if(mesh->vertices.find(v.first) != mesh->vertices.end()){
+            message("error 1.1: %llu found!!!\n", v.first);
+        }
+        mesh->norm.push_back(v.second);
+    }
+    timing_apply("add_norm[end]");
+
+    
+    
     timing_apply("add_edge[start]");
     // add edges
-    for (auto edge : submesh->add_edge){
-        mesh->edge.insert(edge);
-        /*
-         auto pair = mesh->edge.insert(edge);
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), pair.first);
-         // for each vertex find the id in vertices vector and get the index
-         auto a = mesh->vertex_id_map[edge.second.first];
-         auto b = mesh->vertex_id_map[edge.second.second];
-         
-         // put this 2 indices in vector
-         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
-         }
-         */
+    for (auto edge : meshdiff->add_edge){
+        mesh->edge.emplace(edge.first,make_pair(mesh->edge_index.size(),edge.second));
+        auto& a = mesh->vertices[edge.second.first];
+        auto& b = mesh->vertices[edge.second.second];
+        mesh->edge_index.push_back({a.first,b.first});
     }
+    
+    if(mesh->edge.size() != es + meshdiff->add_edge.size()){
+        message("error 8\n");
+    }
+    else
+        es += meshdiff->add_edge.size();
+    
     timing_apply("add_edge[end]");
     timing_apply("add_triangle[start]");
     // add triangles
-    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    for (auto triangle : meshdiff->add_triangle){
+        auto& a = mesh->vertices[triangle.second.first];
+        auto& b = mesh->vertices[triangle.second.second];
+        auto& c = mesh->vertices[triangle.second.third];
+        // compute normal
+        auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+        // update vertex adj
+        a.second.emplace(triangle.first);
+        b.second.emplace(triangle.first);
+        c.second.emplace(triangle.first);
+        
+        // add triangle
+        mesh->triangle.emplace(triangle.first, make_tuple(mesh->triangle_index.size(),triangle.second,n) );
+        mesh->triangle_index.push_back({a.first,b.first,c.first});
+    }
+    
+    if(mesh->triangle.size() != ts + meshdiff->add_triangle.size()){
+        message("error 9\n");
+    }
+    else
+        ts += meshdiff->add_triangle.size();
+    
+    
     timing_apply("add_triangle[end]");
     timing_apply("add_quad[start]");
     // add quads
-    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    for (auto quad : meshdiff->add_quad){
+        auto& a = mesh->vertices[quad.second.first];
+        auto& b = mesh->vertices[quad.second.second];
+        auto& c = mesh->vertices[quad.second.third];
+        auto& d = mesh->vertices[quad.second.fourth];
+        // compute normal
+        auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                           normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+        // update vertex  adj
+        a.second.emplace(quad.first);
+        b.second.emplace(quad.first);
+        c.second.emplace(quad.first);
+        d.second.emplace(quad.first);
+        
+        // add
+        mesh->quad.emplace(quad.first, make_tuple(mesh->quad_index.size(),quad.second,n));
+        mesh->quad_index.push_back({a.first,b.first,c.first,d.first});
+    }
+    if(mesh->quad.size() != qs + meshdiff->add_quad.size()){
+        message("error 10\n");
+    }
+    else
+        qs += meshdiff->add_quad.size();
+    
     timing_apply("add_quad[end]");
     
     // set mesh version for shuttle
-    mesh->_version = submesh->_version;
+    mesh->_version = meshdiff->_version;
     
-    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
-    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
-    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
-    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
-    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
-    not submesh->update_vertex.empty();
-    timing_apply("rebuild_index[start]");
-    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
-    timing_apply("rebuild_index[end]");
+    // if set change frame coordinates
+    if (not isnan(meshdiff->frame)) mesh->frame = meshdiff->frame;
+    
+    vs = mesh->vertices.size();
+    ts = mesh->triangle.size();
+    qs = mesh->quad.size();
+    
+    //indexing_vertex_position(mesh);
+    timing_apply("indexing[start]");
+    indexing_triangle_position(mesh);
+    indexing_quad_position(mesh);
+    //indexing_edge_position(mesh);
+    timing_apply("indexing[end]");
+    
+    
 }
 
+// new version
 // applay vertex creation, elimination and update on a mesh.
 // It updates also all other structure in a mesh (edges & faces)
-void apply_changes(Mesh* mesh, SubMesh* submesh, bool save_history){
+void apply_mesh_change(Mesh* mesh, MeshDiff* meshdiff, timestamp_t save_history){
+    auto vs = mesh->vertices.size();
+    auto ts = mesh->triangle.size();
+    auto qs = mesh->quad.size();
+    auto es = mesh->edge.size();
+    
     timing_apply("save_history[start]");
     if (save_history) {
-        auto clone = new SubMesh(*submesh);
-        submesh_history.emplace(get_timestamp(),clone);
+        auto clone = new MeshDiff(*meshdiff);
+        meshdiff_history.emplace(save_history,clone);
     }
     timing_apply("save_history[end]");
 
-    auto need_update_pos_faces = not submesh->remove_vertex.empty();
-    
     timing_apply("add_vertex[start]");
     // add new vertex
-    for (auto v : submesh->add_vertex){
-        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
+    for (auto v : meshdiff->add_vertex){
+        if(mesh->vertices.find(v.first) != mesh->vertices.end()){
+            message("error 1.1: %llu found!!!\n", v.first);
+        }
+        mesh->vertices.emplace(v.first, make_pair(mesh->pos.size(),set<timestamp_t>() ));
         mesh->pos.push_back(v.second);
         mesh->norm.push_back(zero3f);
     }
     timing_apply("add_vertex[end]");
+    
+    if(mesh->vertices.size() != vs + meshdiff->add_vertex.size()){
+        message("error 1: %d != %d + %d\n", mesh->vertices.size() , vs , meshdiff->add_vertex.size());
+    }
+    else
+        vs += meshdiff->add_vertex.size();
+    
     timing_apply("update_vertex[start]");
     // update existing vertex
-    for (auto v : submesh->update_vertex) mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
+    for (auto v : meshdiff->update_vertex) mesh->pos[mesh->vertices[v.first].first] = v.second;
+    
+    if(mesh->vertices.size() != vs){
+        message("error 2\n");
+    }
+    
+    // for each vertex update compute new normal
+    for (auto v : meshdiff->update_vertex){
+        auto vertex_info = mesh->vertices[v.first];
+        auto faces = vertex_info.second;
+        //mesh->norm[vertex_info.first] = zero3f; // initialize new norm
+        // for each adjacent face compute new normal
+        for (auto f : faces){
+            auto triangle_info = mesh->triangle.find(f);
+            if (not (triangle_info == mesh->triangle.end())){
+                auto t_id = get<1>(triangle_info->second);
+                // face is a triangle
+                auto& a = mesh->vertices[t_id.first];
+                auto& b = mesh->vertices[t_id.second];
+                auto& c = mesh->vertices[t_id.third];
+                // compute triangle normal
+                auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+                //mesh->norm[vertex_info.first] += n; // increment vertex normal
+                auto old_face_norm = get<2>(triangle_info->second);
+                // update linked vertex normal
+                mesh->norm[a.first] += (n - old_face_norm) / a.second.size();
+                mesh->norm[b.first] += (n - old_face_norm) / b.second.size();
+                mesh->norm[c.first] += (n - old_face_norm) / c.second.size();
+             
+                get<2>(triangle_info->second) = n; // update face normal
+            }
+            else{
+                // face is a quad
+                auto& quad_info = mesh->quad[f];
+                auto q_id = std::get<1>(quad_info);
+                auto& a = mesh->vertices[q_id.first];
+                auto& b = mesh->vertices[q_id.second];
+                auto& c = mesh->vertices[q_id.third];
+                auto& d = mesh->vertices[q_id.fourth];
+                // compute triangle normal
+                auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                                   normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+                //mesh->norm[vertex_info.first] += n; // increment vertex normal
+                auto old_face_norm = std::get<2>(quad_info);
+                // update linked vertex normal
+                mesh->norm[a.first] += (n - old_face_norm) / a.second.size();
+                mesh->norm[b.first] += (n - old_face_norm) / b.second.size();
+                mesh->norm[c.first] += (n - old_face_norm) / c.second.size();
+                mesh->norm[d.first] += (n - old_face_norm) / d.second.size();
+                std::get<2>(quad_info) = n; // update face normal
+            }
+        }
+        // apply mean to normals
+        //mesh->norm[vertex_info.first] /= faces.size();
+
+    }
+    
+    if(mesh->vertices.size() != vs){
+        message("error 3\n");
+    }
+
     timing_apply("update_vertex[end]");
-    timing_apply("delete_vertex[start]");
-    // vertex delete
-    for (auto v : submesh->remove_vertex) mesh->vertex_id_map.erase(v);    
-    timing_apply("delete_vertex[end]");
-    timing_apply("init_position[start]");
-    // restore vertex position indexing
-    if(need_update_pos_faces) indexing_vertex_position(mesh);
-    timing_apply("init_position[end]");
+    
+//    timing_apply("init_position[start]");
+//    // restore vertex position indexing
+//    if(need_update_pos_faces) indexing_vertex_position(mesh);
+//    timing_apply("init_position[end]");
     timing_apply("remove_edges[start]");
     // remove edges
-    for (auto edge : submesh->remove_edge){
-        /*
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
-         mesh->edge_index.erase(mesh->edge_index.begin()+index);
-         }
-         */
+    for (auto edge : meshdiff->remove_edge){
+        // set index to -1
+        mesh->edge_index[mesh->edge[edge].first] = none2i;
+        // remove edge
         mesh->edge.erase(edge);
     }
+
+    if(mesh->edge.size() != es - meshdiff->remove_edge.size()){
+        message("error 4\n");
+    }
+    else
+        es -= meshdiff->remove_edge.size();
+    
     timing_apply("remove_edges[end]");
     timing_apply("remove_triangle[start]");
     // remove triangles
-    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
+    for (auto triangle : meshdiff->remove_triangle){
+        auto t = mesh->triangle[triangle];
+        //update vertex normal
+        auto& a = mesh->vertices[get<1>(t).first];
+        auto& b = mesh->vertices[get<1>(t).second];
+        auto& c = mesh->vertices[get<1>(t).third];
+        
+        if (a.second.size()){
+            mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) - get<2>(t);
+            a.second.erase(triangle);
+            if(a.second.size() > 1) mesh->norm[a.first] /= a.second.size();
+        }
+        
+        if (b.second.size()){
+            mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) - get<2>(t);
+            b.second.erase(triangle);
+            if(b.second.size() > 1) mesh->norm[b.first] /= b.second.size();
+        }
+        
+        if (c.second.size()){
+            mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) - get<2>(t);
+            c.second.erase(triangle);
+            if(c.second.size() > 1) mesh->norm[c.first] /= c.second.size();
+        }
+        // set index to -1
+        //mesh->triangle_index[get<0>(t)] = zero3i;
+        mesh->triangle_index[get<0>(t)] = none3i;
+        
+        // remove triangle
+        mesh->triangle.erase(triangle);
+    }
+    
+    if(mesh->triangle.size() != ts - meshdiff->remove_triangle.size()){
+        message("error 5\n");
+    }
+    else
+        ts -= meshdiff->remove_triangle.size();
+    
     timing_apply("remove_triangle[end]");
     timing_apply("remove_quad[start]");
     // remove quads
-    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
+    for (auto quad : meshdiff->remove_quad){
+        auto q = mesh->quad[quad];
+        //update vertex normal
+        auto& a = mesh->vertices[get<1>(q).first];
+        auto& b = mesh->vertices[get<1>(q).second];
+        auto& c = mesh->vertices[get<1>(q).third];
+        auto& d = mesh->vertices[get<1>(q).fourth];
+        
+        if (a.second.size()){
+            mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) - get<2>(q);
+            a.second.erase(quad);
+            if(a.second.size() > 1) mesh->norm[a.first] /= a.second.size();
+        }
+        if (b.second.size()){
+            mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) - get<2>(q);
+            b.second.erase(quad);
+            if(b.second.size() > 1) mesh->norm[b.first] /= b.second.size();
+        }
+        if (c.second.size()){
+            mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) - get<2>(q);
+            c.second.erase(quad);
+            if(c.second.size() > 1) mesh->norm[c.first] /= c.second.size();
+        }
+        if (d.second.size()){
+            mesh->norm[d.first] = (mesh->norm[d.first] * d.second.size()) - get<2>(q);
+            d.second.erase(find(begin(d.second), end(d.second), quad));
+            if(d.second.size() > 1) mesh->norm[d.first] /= d.second.size();
+        }
+        // set index to -1
+        //mesh->quad_index[get<0>(q)] = zero4i;
+        mesh->quad_index[get<0>(q)] = none4i;
+        
+        // remove qiad
+        mesh->quad.erase(quad);
+    }
+    if(mesh->quad.size() != qs - meshdiff->remove_quad.size()){
+        message("error 6\n");
+    }
+    else
+        qs -= meshdiff->remove_quad.size();
+
+    
     timing_apply("remove_quad[end]");
+    
+    timing_apply("delete_vertex[start]");
+    // vertex delete
+    for (auto v : meshdiff->remove_vertex){
+        mesh->vertices.erase(v);
+        if(mesh->vertices.find(v) != mesh->vertices.end()){
+            message("error 7.1: %llu found!!!\n", v);
+        }
+        
+    }
+    
+    if(mesh->vertices.size() != vs - meshdiff->remove_vertex.size()){
+        message("error 7\n");
+    }
+    else
+        vs -= meshdiff->add_vertex.size();
+    
+    
+    timing_apply("delete_vertex[end]");
+
+    
     timing_apply("add_edge[start]");
     // add edges
-    for (auto edge : submesh->add_edge){
-        mesh->edge.insert(edge);
-        /*
-         auto pair = mesh->edge.insert(edge);
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), pair.first);
-         // for each vertex find the id in vertices vector and get the index
-         auto a = mesh->vertex_id_map[edge.second.first];
-         auto b = mesh->vertex_id_map[edge.second.second];
-         
-         // put this 2 indices in vector
-         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
-         }
-         */
+    for (auto edge : meshdiff->add_edge){
+        mesh->edge.emplace(edge.first,make_pair(mesh->edge_index.size(),edge.second));
+        auto& a = mesh->vertices[edge.second.first];
+        auto& b = mesh->vertices[edge.second.second];
+        mesh->edge_index.push_back({a.first,b.first});
     }
+    
+    if(mesh->edge.size() != es + meshdiff->add_edge.size()){
+        message("error 8\n");
+    }
+    else
+        es += meshdiff->add_edge.size();
+
     timing_apply("add_edge[end]");
     timing_apply("add_triangle[start]");
     // add triangles
-    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    for (auto triangle : meshdiff->add_triangle){
+        auto& a = mesh->vertices[triangle.second.first];
+        auto& b = mesh->vertices[triangle.second.second];
+        auto& c = mesh->vertices[triangle.second.third];
+        // compute normal
+        auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+        // update first vertex norm and adj
+        mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) + n;
+        a.second.emplace(triangle.first);
+        mesh->norm[a.first] /= a.second.size();
+        // update second vertex norm and adj
+        mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) + n;
+        b.second.emplace(triangle.first);
+        mesh->norm[b.first] /= b.second.size();
+        // update third vertex norm and adj
+        mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) + n;
+        c.second.emplace(triangle.first);
+        mesh->norm[c.first] /= c.second.size();
+        
+        // add
+        mesh->triangle.emplace(triangle.first, make_tuple(mesh->triangle_index.size(),triangle.second,n) );
+        mesh->triangle_index.push_back({a.first,b.first,c.first});
+    }
+    
+    if(mesh->triangle.size() != ts + meshdiff->add_triangle.size()){
+        message("error 9\n");
+    }
+    else
+        ts += meshdiff->add_triangle.size();
+
+    
     timing_apply("add_triangle[end]");
     timing_apply("add_quad[start]");
     // add quads
-    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    for (auto quad : meshdiff->add_quad){
+        auto& a = mesh->vertices[quad.second.first];
+        auto& b = mesh->vertices[quad.second.second];
+        auto& c = mesh->vertices[quad.second.third];
+        auto& d = mesh->vertices[quad.second.fourth];
+        // compute normal
+        auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                           normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+        // update first vertex norm and adj
+        mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) + n;
+        a.second.emplace(quad.first);
+        mesh->norm[a.first] /= a.second.size();
+        // update second vertex norm and adj
+        mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) + n;
+        b.second.emplace(quad.first);
+        mesh->norm[b.first] /= b.second.size();
+        // update third vertex norm and adj
+        mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) + n;
+        c.second.emplace(quad.first);
+        mesh->norm[c.first] /= c.second.size();
+        // update third vertex norm and adj
+        mesh->norm[d.first] = (mesh->norm[d.first] * d.second.size()) + n;
+        d.second.emplace(quad.first);
+        mesh->norm[d.first] /= d.second.size();
+        
+        // add
+        mesh->quad.emplace(quad.first, make_tuple(mesh->quad_index.size(),quad.second,n));
+        mesh->quad_index.push_back({a.first,b.first,c.first,d.first});
+    }
+    if(mesh->quad.size() != qs + meshdiff->add_quad.size()){
+        message("error 10\n");
+    }
+    else
+        qs += meshdiff->add_quad.size();
+
     timing_apply("add_quad[end]");
 
     // set mesh version for shuttle
-    mesh->_version = submesh->_version;
+    mesh->_version = meshdiff->_version;
     
-    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
-    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
-    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
-    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
-    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
-    not submesh->update_vertex.empty();
-    timing_apply("rebuild_index[start]");
-    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
-    timing_apply("rebuild_index[end]");
+    // if set change frame coordinates
+    if (not isnan(meshdiff->frame)) mesh->frame = meshdiff->frame;
+    
+    vs = mesh->vertices.size();
+    ts = mesh->triangle.size();
+    qs = mesh->quad.size();
+
+    //indexing_vertex_position(mesh);
+    timing_apply("indexing[start]");
+    indexing_triangle_position(mesh);
+    indexing_quad_position(mesh);
+    indexing_edge_position(mesh);
+    timing_apply("indexing[end]");
+
+
 }
 
-// applay vertex creation, elimination and update on a mesh.
-// It updates also all other structure in a mesh (edges & faces)
-void apply_changes_check(Mesh* mesh, Mesh* real_mesh, SubMesh* submesh, bool save_history){
+void apply_camera_change(Camera* camera, CameraDiff* cameradiff, timestamp_t save_history){
     if (save_history) {
-        auto clone = new Mesh(*mesh);
-        mesh_history.emplace(get_timestamp(),clone);
+        auto clone = new CameraDiff(*cameradiff);
+        cameradiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(cameradiff->frame)) camera->frame = cameradiff->frame;
+    if (not isnan(cameradiff->width)) camera->width = cameradiff->width;
+    if (not isnan(cameradiff->height)) camera->height = cameradiff->height;
+    if (not isnan(cameradiff->dist)) camera->dist = cameradiff->dist;
+    if (not isnan(cameradiff->focus)) camera->focus = cameradiff->focus;
+    camera->_version = cameradiff->_version;
+
+}
+
+void apply_light_change(Light* light, LightDiff* lightdiff, timestamp_t save_history){
+    if (save_history) {
+        auto clone = new LightDiff(*lightdiff);
+        lightdiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(lightdiff->frame)) light->frame = lightdiff->frame;
+    if (not isnan(lightdiff->intensity)) light->intensity = lightdiff->intensity;
+    light->_version = lightdiff->_version;
+}
+
+void apply_material_change(Material* material, MaterialDiff* matdiff, timestamp_t save_history){
+    if (save_history) {
+        auto clone = new MaterialDiff(*matdiff);
+        materialdiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(matdiff->ke)) material->ke = matdiff->ke;
+    if (not isnan(matdiff->kd)) material->kd = matdiff->kd;
+    if (not isnan(matdiff->ks)) material->ks = matdiff->ks;
+    if (not isnan(matdiff->n)) material->n = matdiff->n;
+    if (not isnan(matdiff->kr)) material->kr = matdiff->kr;
+    material->_version = matdiff->_version;
+}
+
+void apply_change(Scene* scene, SceneDiff* scenediff, timestamp_t save_history){
+    if (save_history) {
+        scenediff->_label = save_history;
+        auto clone = new SceneDiff(*scenediff);
+        scenediff_history.push_back(make_pair(save_history,clone));
+    }
+    // camera diff change
+    // it doesn't support multiple cameras
+    if(scenediff->cameras.size()) apply_camera_change(scene->camera, scenediff->cameras[0], save_history);
+    
+    // light diff change
+    if(scenediff->lights.size()){
+        for (auto lightdiff : scenediff->lights){
+            auto light = scene->ids_map[lightdiff->_id_].as_light();
+            apply_light_change(light, lightdiff, save_history);
+            
+        }
     }
     
-    auto need_update_pos_faces = not submesh->remove_vertex.empty();
+    // mesh diff change
+    if(scenediff->meshes.size()){
+        for (auto meshdiff : scenediff->meshes){
+            auto mesh = scene->meshes[0];
+            apply_mesh_change(mesh, meshdiff, save_history);
+        }
+    }
     
-    // add new vertex
-    for (auto v : submesh->add_vertex){
-        // check
-        if ( real_mesh->vertex_id_map.find(v.first) == real_mesh->vertex_id_map.end() or
-            not (real_mesh->pos[real_mesh->vertex_id_map[v.first]] == v.second))
-            message("[add_vertex] error for %llu",v.first);
+    // material diff change
+    if(scenediff->materials.size()){
+        for (auto matdiff : scenediff->materials){
+            auto mat = scene->ids_map[matdiff->_id_].as_material();
+            apply_material_change(mat, matdiff, save_history);
+        }
+    }
+    
+    global_scene_version = scenediff->_label;
 
-        mesh->vertex_id_map.emplace(v.first,mesh->pos.size());
+}
+
+//reverse
+MeshDiff* apply_mesh_change_reverse(Mesh* mesh, MeshDiff* meshdiff, timestamp_t save_history){
+    auto reverse = new MeshDiff();
+    reverse->_id_ = mesh->_id_;
+
+    auto vs = mesh->vertices.size();
+    auto ts = mesh->triangle.size();
+    auto qs = mesh->quad.size();
+    auto es = mesh->edge.size();
+    
+    timing_apply("save_history[start]");
+    if (save_history) {
+        auto clone = new MeshDiff(*meshdiff);
+        meshdiff_history.emplace(save_history,clone);
+    }
+    timing_apply("save_history[end]");
+    
+    timing_apply("add_vertex[start]");
+    // add new vertex
+    for (auto v : meshdiff->add_vertex){
+        if(mesh->vertices.find(v.first) != mesh->vertices.end()){
+            message("error 1.1: %llu found!!!\n", v.first);
+        }
+        // reverse
+        reverse->remove_vertex.push_back(v.first);
+
+        mesh->vertices.emplace(v.first, make_pair(mesh->pos.size(),set<timestamp_t>() ));
         mesh->pos.push_back(v.second);
         mesh->norm.push_back(zero3f);
     }
+    timing_apply("add_vertex[end]");
+    
+    if(mesh->vertices.size() != vs + meshdiff->add_vertex.size()){
+        message("error 1: %d != %d + %d\n", mesh->vertices.size() , vs , meshdiff->add_vertex.size());
+    }
+    else
+        vs += meshdiff->add_vertex.size();
+    
+    timing_apply("update_vertex[start]");
     // update existing vertex
-    for (auto v : submesh->update_vertex){
-        // check
-        if ( real_mesh->vertex_id_map.find(v.first) == real_mesh->vertex_id_map.end() or
-            not (real_mesh->pos[real_mesh->vertex_id_map[v.first]] == v.second))
-            message("[update_vertex] error for %llu",v.first);
+    for (auto v : meshdiff->update_vertex){
+        // reverse
+        reverse->update_vertex.emplace(v.first, mesh->pos[mesh->vertices[v.first].first]);
         
-        mesh->pos[mesh->vertex_id_map[v.first]] = v.second;
+        mesh->pos[mesh->vertices[v.first].first] = v.second;
     }
     
-    // vertex delete
-    for (auto v : submesh->remove_vertex){
-        if (  real_mesh->vertex_id_map.find(v) != real_mesh->vertex_id_map.end())
-            message("[remove_vertex] error for %llu",v);
-        
-        mesh->vertex_id_map.erase(v);
+    if(mesh->vertices.size() != vs){
+        message("error 2\n");
     }
     
-    // restore vertex position indexing
-    if(need_update_pos_faces) indexing_vertex_position(mesh);
+    // for each vertex update compute new normal
+    for (auto v : meshdiff->update_vertex){
+        auto vertex_info = mesh->vertices[v.first];
+        auto faces = vertex_info.second;
+        //mesh->norm[vertex_info.first] = zero3f; // initialize new norm
+        // for each adjacent face compute new normal
+        for (auto f : faces){
+            auto triangle_info = mesh->triangle.find(f);
+            if (not (triangle_info == mesh->triangle.end())){
+                auto t_id = get<1>(triangle_info->second);
+                // face is a triangle
+                auto& a = mesh->vertices[t_id.first];
+                auto& b = mesh->vertices[t_id.second];
+                auto& c = mesh->vertices[t_id.third];
+                // compute triangle normal
+                auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+                //mesh->norm[vertex_info.first] += n; // increment vertex normal
+                auto old_face_norm = get<2>(triangle_info->second);
+                // update linked vertex normal
+                mesh->norm[a.first] += (n - old_face_norm) / a.second.size();
+                mesh->norm[b.first] += (n - old_face_norm) / b.second.size();
+                mesh->norm[c.first] += (n - old_face_norm) / c.second.size();
+                
+                get<2>(triangle_info->second) = n; // update face normal
+            }
+            else{
+                // face is a quad
+                auto& quad_info = mesh->quad[f];
+                auto q_id = std::get<1>(quad_info);
+                auto& a = mesh->vertices[q_id.first];
+                auto& b = mesh->vertices[q_id.second];
+                auto& c = mesh->vertices[q_id.third];
+                auto& d = mesh->vertices[q_id.fourth];
+                // compute triangle normal
+                auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                                   normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+                //mesh->norm[vertex_info.first] += n; // increment vertex normal
+                auto old_face_norm = std::get<2>(quad_info);
+                // update linked vertex normal
+                mesh->norm[a.first] += (n - old_face_norm) / a.second.size();
+                mesh->norm[b.first] += (n - old_face_norm) / b.second.size();
+                mesh->norm[c.first] += (n - old_face_norm) / c.second.size();
+                mesh->norm[d.first] += (n - old_face_norm) / d.second.size();
+                std::get<2>(quad_info) = n; // update face normal
+            }
+        }
+        // apply mean to normals
+        //mesh->norm[vertex_info.first] /= faces.size();
+        
+    }
     
+    if(mesh->vertices.size() != vs){
+        message("error 3\n");
+    }
     
+    timing_apply("update_vertex[end]");
     
-    
+    //    timing_apply("init_position[start]");
+    //    // restore vertex position indexing
+    //    if(need_update_pos_faces) indexing_vertex_position(mesh);
+    //    timing_apply("init_position[end]");
+    timing_apply("remove_edges[start]");
     // remove edges
-    for (auto edge : submesh->remove_edge){
-        /*
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), mesh->edge.find(edge));
-         mesh->edge_index.erase(mesh->edge_index.begin()+index);
-         }
-         */
+    for (auto edge : meshdiff->remove_edge){
+        // reverse
+        reverse->add_edge.emplace(edge,mesh->edge[edge].second);
+        
+        // set index to -1
+        mesh->edge_index[mesh->edge[edge].first] = none2i;
+        // remove edge
         mesh->edge.erase(edge);
     }
     
+    if(mesh->edge.size() != es - meshdiff->remove_edge.size()){
+        message("error 4\n");
+    }
+    else
+        es -= meshdiff->remove_edge.size();
+    
+    timing_apply("remove_edges[end]");
+    timing_apply("remove_triangle[start]");
     // remove triangles
-    for (auto triangle : submesh->remove_triangle) mesh->triangle.erase(triangle);
-    
-    // remove quads
-    for (auto quad : submesh->remove_quad) mesh->quad.erase(quad);
-    
-    // add edges
-    for (auto edge : submesh->add_edge){
-        mesh->edge.insert(edge);
-        /*
-         auto pair = mesh->edge.insert(edge);
-         if (not need_update_pos_faces){
-         int index = distance(mesh->edge.begin(), pair.first);
-         // for each vertex find the id in vertices vector and get the index
-         auto a = mesh->vertex_id_map[edge.second.first];
-         auto b = mesh->vertex_id_map[edge.second.second];
-         
-         // put this 2 indices in vector
-         mesh->edge_index.insert(mesh->edge_index.begin()+index, {a,b});
-         }
-         */
+    for (auto triangle : meshdiff->remove_triangle){
+        auto t = mesh->triangle[triangle];
+        
+        // reverse
+        reverse->add_triangle.emplace(triangle,get<1>(t));
+        
+        //update vertex normal
+        auto& a = mesh->vertices[get<1>(t).first];
+        auto& b = mesh->vertices[get<1>(t).second];
+        auto& c = mesh->vertices[get<1>(t).third];
+        
+        if (a.second.size()){
+            mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) - get<2>(t);
+            a.second.erase(triangle);
+            if(a.second.size() > 1) mesh->norm[a.first] /= a.second.size();
+        }
+        
+        if (b.second.size()){
+            mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) - get<2>(t);
+            b.second.erase(triangle);
+            if(b.second.size() > 1) mesh->norm[b.first] /= b.second.size();
+        }
+        
+        if (c.second.size()){
+            mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) - get<2>(t);
+            c.second.erase(triangle);
+            if(c.second.size() > 1) mesh->norm[c.first] /= c.second.size();
+        }
+        // set index to -1
+        //mesh->triangle_index[get<0>(t)] = zero3i;
+        mesh->triangle_index[get<0>(t)] = none3i;
+        
+        // remove triangle
+        mesh->triangle.erase(triangle);
     }
     
-    // add triangles
-    for (auto triangle : submesh->add_triangle) mesh->triangle.insert(triangle);
+    if(mesh->triangle.size() != ts - meshdiff->remove_triangle.size()){
+        message("error 5\n");
+    }
+    else
+        ts -= meshdiff->remove_triangle.size();
     
+    timing_apply("remove_triangle[end]");
+    timing_apply("remove_quad[start]");
+    // remove quads
+    for (auto quad : meshdiff->remove_quad){
+        auto q = mesh->quad[quad];
+        
+        // reverse
+        reverse->add_quad.emplace(quad,get<1>(q));
+
+        //update vertex normal
+        auto& a = mesh->vertices[get<1>(q).first];
+        auto& b = mesh->vertices[get<1>(q).second];
+        auto& c = mesh->vertices[get<1>(q).third];
+        auto& d = mesh->vertices[get<1>(q).fourth];
+        
+        if (a.second.size()){
+            mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) - get<2>(q);
+            a.second.erase(quad);
+            if(a.second.size() > 1) mesh->norm[a.first] /= a.second.size();
+        }
+        if (b.second.size()){
+            mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) - get<2>(q);
+            b.second.erase(quad);
+            if(b.second.size() > 1) mesh->norm[b.first] /= b.second.size();
+        }
+        if (c.second.size()){
+            mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) - get<2>(q);
+            c.second.erase(quad);
+            if(c.second.size() > 1) mesh->norm[c.first] /= c.second.size();
+        }
+        if (d.second.size()){
+            mesh->norm[d.first] = (mesh->norm[d.first] * d.second.size()) - get<2>(q);
+            d.second.erase(find(begin(d.second), end(d.second), quad));
+            if(d.second.size() > 1) mesh->norm[d.first] /= d.second.size();
+        }
+        // set index to -1
+        //mesh->quad_index[get<0>(q)] = zero4i;
+        mesh->quad_index[get<0>(q)] = none4i;
+        
+        // remove quad
+        mesh->quad.erase(quad);
+    }
+    if(mesh->quad.size() != qs - meshdiff->remove_quad.size()){
+        message("error 6\n");
+    }
+    else
+        qs -= meshdiff->remove_quad.size();
+    
+    
+    timing_apply("remove_quad[end]");
+    
+    timing_apply("delete_vertex[start]");
+    // vertex delete
+    for (auto v : meshdiff->remove_vertex){
+        // reverse
+        reverse->add_vertex.emplace(v,mesh->pos[mesh->vertices[v].first]);
+
+        mesh->vertices.erase(v);
+        if(mesh->vertices.find(v) != mesh->vertices.end()){
+            message("error 7.1: %llu found!!!\n", v);
+        }
+        
+    }
+    
+    if(mesh->vertices.size() != vs - meshdiff->remove_vertex.size()){
+        message("error 7\n");
+    }
+    else
+        vs -= meshdiff->add_vertex.size();
+    
+    
+    timing_apply("delete_vertex[end]");
+    
+    
+    timing_apply("add_edge[start]");
+    // add edges
+    for (auto edge : meshdiff->add_edge){
+        // reverse
+        reverse->remove_edge.push_back(edge.first);
+
+        mesh->edge.emplace(edge.first,make_pair(mesh->edge_index.size(),edge.second));
+        auto& a = mesh->vertices[edge.second.first];
+        auto& b = mesh->vertices[edge.second.second];
+        mesh->edge_index.push_back({a.first,b.first});
+    }
+    
+    if(mesh->edge.size() != es + meshdiff->add_edge.size()){
+        message("error 8\n");
+    }
+    else
+        es += meshdiff->add_edge.size();
+    
+    timing_apply("add_edge[end]");
+    timing_apply("add_triangle[start]");
+    // add triangles
+    for (auto triangle : meshdiff->add_triangle){
+        // reverse
+        reverse->remove_triangle.push_back(triangle.first);
+
+        auto& a = mesh->vertices[triangle.second.first];
+        auto& b = mesh->vertices[triangle.second.second];
+        auto& c = mesh->vertices[triangle.second.third];
+        // compute normal
+        auto n = normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first]));
+        // update first vertex norm and adj
+        mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) + n;
+        a.second.emplace(triangle.first);
+        mesh->norm[a.first] /= a.second.size();
+        // update second vertex norm and adj
+        mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) + n;
+        b.second.emplace(triangle.first);
+        mesh->norm[b.first] /= b.second.size();
+        // update third vertex norm and adj
+        mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) + n;
+        c.second.emplace(triangle.first);
+        mesh->norm[c.first] /= c.second.size();
+        
+        // add
+        mesh->triangle.emplace(triangle.first, make_tuple(mesh->triangle_index.size(),triangle.second,n) );
+        mesh->triangle_index.push_back({a.first,b.first,c.first});
+    }
+    
+    if(mesh->triangle.size() != ts + meshdiff->add_triangle.size()){
+        message("error 9\n");
+    }
+    else
+        ts += meshdiff->add_triangle.size();
+    
+    
+    timing_apply("add_triangle[end]");
+    timing_apply("add_quad[start]");
     // add quads
-    for (auto quad : submesh->add_quad) mesh->quad.insert(quad);
+    for (auto quad : meshdiff->add_quad){
+        // reverse
+        reverse->remove_quad.push_back(quad.first);
+
+        auto& a = mesh->vertices[quad.second.first];
+        auto& b = mesh->vertices[quad.second.second];
+        auto& c = mesh->vertices[quad.second.third];
+        auto& d = mesh->vertices[quad.second.fourth];
+        // compute normal
+        auto n = normalize(normalize(cross(mesh->pos[b.first]-mesh->pos[a.first], mesh->pos[c.first]-mesh->pos[a.first])) +
+                           normalize(cross(mesh->pos[c.first]-mesh->pos[a.first], mesh->pos[d.first]-mesh->pos[a.first])));
+        // update first vertex norm and adj
+        mesh->norm[a.first] = (mesh->norm[a.first] * a.second.size()) + n;
+        a.second.emplace(quad.first);
+        mesh->norm[a.first] /= a.second.size();
+        // update second vertex norm and adj
+        mesh->norm[b.first] = (mesh->norm[b.first] * b.second.size()) + n;
+        b.second.emplace(quad.first);
+        mesh->norm[b.first] /= b.second.size();
+        // update third vertex norm and adj
+        mesh->norm[c.first] = (mesh->norm[c.first] * c.second.size()) + n;
+        c.second.emplace(quad.first);
+        mesh->norm[c.first] /= c.second.size();
+        // update third vertex norm and adj
+        mesh->norm[d.first] = (mesh->norm[d.first] * d.second.size()) + n;
+        d.second.emplace(quad.first);
+        mesh->norm[d.first] /= d.second.size();
+        
+        // add
+        mesh->quad.emplace(quad.first, make_tuple(mesh->quad_index.size(),quad.second,n));
+        mesh->quad_index.push_back({a.first,b.first,c.first,d.first});
+    }
+    if(mesh->quad.size() != qs + meshdiff->add_quad.size()){
+        message("error 10\n");
+    }
+    else
+        qs += meshdiff->add_quad.size();
+    
+    timing_apply("add_quad[end]");
     
     // set mesh version for shuttle
-    mesh->_version = submesh->_version;
+    reverse->_version = mesh->_version;
+    mesh->_version = meshdiff->_version;
     
-    bool force_quad_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or need_update_pos_faces;
-    bool force_triangle_update = not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or need_update_pos_faces;
-    bool force_edges_update = need_update_pos_faces or not submesh->remove_edge.empty() or not submesh->add_edge.empty();
-    bool force_normal_update = not submesh->add_quad.empty() or not submesh->remove_quad.empty() or
-    not submesh->add_triangle.empty() or not submesh->remove_triangle.empty() or
-    not submesh->update_vertex.empty();
-    init_mesh_properties_from_map(mesh, force_quad_update, force_triangle_update, force_edges_update, force_normal_update);
+    // if set change frame coordinates
+    if (not isnan(meshdiff->frame)){ reverse->frame = mesh->frame; mesh->frame = meshdiff->frame; }
+    
+    vs = mesh->vertices.size();
+    ts = mesh->triangle.size();
+    qs = mesh->quad.size();
+    
+    //indexing_vertex_position(mesh);
+    timing_apply("indexing[start]");
+    indexing_triangle_position(mesh);
+    indexing_quad_position(mesh);
+    indexing_edge_position(mesh);
+    timing_apply("indexing[end]");
+    
+    return reverse;
 }
 
+CameraDiff* apply_camera_change_reverse(Camera* camera, CameraDiff* cameradiff, timestamp_t save_history){
+    auto reverse = new CameraDiff();
+    reverse->_id_ = camera->_id_;
+
+    if (save_history) {
+        auto clone = new CameraDiff(*cameradiff);
+        cameradiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(cameradiff->frame)){ reverse->frame = camera->frame; camera->frame = cameradiff->frame; }
+    if (not isnan(cameradiff->width)){ reverse->width = camera->width; camera->width = cameradiff->width; }
+    if (not isnan(cameradiff->height)){ reverse->height = camera->height; camera->height = cameradiff->height; }
+    if (not isnan(cameradiff->dist)){ reverse->dist = camera->dist; camera->dist = cameradiff->dist; }
+    if (not isnan(cameradiff->focus)){ reverse->focus = camera->focus; camera->focus = cameradiff->focus; }
+
+    reverse->_version = camera->_version;
+    camera->_version = cameradiff->_version;
+    
+    return reverse;
+}
+
+LightDiff* apply_light_change_reverse(Light* light, LightDiff* lightdiff, timestamp_t save_history){
+    auto reverse = new LightDiff();
+    reverse->_id_ = light->_id_;
+
+    if (save_history) {
+        auto clone = new LightDiff(*lightdiff);
+        lightdiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(lightdiff->frame)){ reverse->frame = light->frame; light->frame = lightdiff->frame; }
+    if (not isnan(lightdiff->intensity)){ reverse->intensity = light->intensity; light->intensity = lightdiff->intensity; }
+    
+    reverse->_version = light->_version;
+    light->_version = lightdiff->_version;
+    
+    return reverse;
+}
+
+MaterialDiff* apply_material_change_reverse(Material* material, MaterialDiff* matdiff, timestamp_t save_history){
+    auto reverse = new MaterialDiff();
+    reverse->_id_ = material->_id_;
+    
+    if (save_history) {
+        auto clone = new MaterialDiff(*matdiff);
+        materialdiff_history.emplace(save_history,clone);
+    }
+    if (not isnan(matdiff->ke)){ reverse->ke = material->ke; material->ke = matdiff->ke; }
+    if (not isnan(matdiff->kd)){ reverse->kd = material->kd; material->kd = matdiff->kd; }
+    if (not isnan(matdiff->ks)){ reverse->ks = material->ks; material->ks = matdiff->ks; }
+    if (not isnan(matdiff->n)){ reverse->n = material->n; material->n = matdiff->n; }
+    if (not isnan(matdiff->kr)){ reverse->kr = material->kr; material->kr = matdiff->kr; }
+    
+    reverse->_version = material->_version;
+    material->_version = matdiff->_version;
+    
+    return reverse;
+}
+
+void apply_change_reverse(Scene* scene, SceneDiff* scenediff, timestamp_t save_history){
+    auto reverse = new SceneDiff();
+    
+    if (save_history) {
+        scenediff->_label = save_history;
+        reverse->_label = save_history;
+        auto clone = new SceneDiff(*scenediff);
+        scenediff_history.push_back(make_pair(save_history,clone));
+    }
+    // camera diff change
+    // it doesn't support multiple cameras
+    if(scenediff->cameras.size()){
+        auto cameradiff_reverse = apply_camera_change_reverse(scene->camera, scenediff->cameras[0], save_history);
+        reverse->cameras.push_back(cameradiff_reverse);
+    }
+    
+    // light diff change
+    if(scenediff->lights.size()){
+        for (auto lightdiff : scenediff->lights){
+            auto light = scene->ids_map[lightdiff->_id_].as_light();
+            auto lightdiff_reverse = apply_light_change_reverse(light, lightdiff, save_history);
+            reverse->lights.push_back(lightdiff_reverse);
+        }
+    }
+    
+    // mesh diff change
+    if(scenediff->meshes.size()){
+        for (auto meshdiff : scenediff->meshes){
+            auto mesh = scene->meshes[0];
+            auto meshdiff_reverse = apply_mesh_change_reverse(mesh, meshdiff, save_history);
+            reverse->meshes.push_back(meshdiff_reverse);
+        }
+    }
+    
+    // material diff change
+    if(scenediff->materials.size()){
+        for (auto matdiff : scenediff->materials){
+            auto mat = scene->ids_map[matdiff->_id_].as_material();
+            auto materialdiff_reverse = apply_material_change_reverse(mat, matdiff, save_history);
+            reverse->materials.push_back(materialdiff_reverse);
+        }
+    }
+    
+    global_scene_version = scenediff->_label;
+    scenediff_history_reverse.push_back(make_pair(save_history,reverse));
+}
 
 // swap 2 mesh
 void swap_mesh(Mesh* mesh, Scene* scene, bool save_history){
@@ -1176,5 +2203,38 @@ Scene* load_json_scene(const string& filename) {
     json_texture_cache.clear();
     json_texture_paths = { "" };
     return scene;
+}
+
+void json_parse_objects(vector<Light*>* lights, vector<Material*>* materials, vector<Camera*>* cameras, vector<Mesh*>* meshes, const jsonvalue& json) {
+    for (auto& obj :  json.as_array_ref()) {
+        // camera
+        if (obj.object_contains("camera")){
+            cameras->push_back(json_parse_camera(obj.object_element("camera")));
+        }
+        if (obj.object_contains("lookat_camera")){
+            cameras->push_back(json_parse_lookatcamera(obj.object_element("lookat_camera")));
+        }
+        // lights
+        if (obj.object_contains("light")){
+            lights->push_back(json_parse_light(obj.object_element("light")));
+        }
+        // materials
+        if (obj.object_contains("material")){
+            materials->push_back(json_parse_material(obj.object_element("material")));
+        }
+        // meshes
+        if (obj.object_contains("mesh")){
+            meshes->push_back(json_parse_mesh(obj.object_element("mesh")));
+        }
+        
+    }
+}
+
+void load_json_objects(vector<Light*>* lights, vector<Material*>* materials, vector<Camera*>* cameras, vector<Mesh*>* meshes, const string& filename) {
+    json_texture_cache.clear();
+    json_texture_paths = { "" };
+    json_parse_objects(lights, materials, cameras, meshes, load_json(filename));
+    json_texture_cache.clear();
+    json_texture_paths = { "" };
 }
 

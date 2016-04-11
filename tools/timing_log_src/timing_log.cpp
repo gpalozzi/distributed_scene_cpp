@@ -91,10 +91,7 @@ void print_session_log(){
     cout << "\tmessage size: " << to_kb(sender_log["mesh_size"]) << " kb" << endl;
 }
 
-void print_apply_log(){
-    //  timelogs filenames
-    string filename = "../log/apply_timing_v03";
-    
+void print_apply_log(const string& filename){
     // timelogs structurs (map)
     map<string,long long> app_log;
     
@@ -109,23 +106,29 @@ void print_apply_log(){
     cout << "-\t add_vertex: " << time_passed(app_log["add_vertex[start]"], app_log["add_vertex[end]"]) << " s" << endl;
     cout << "-\t update_vertex: " << time_passed(app_log["update_vertex[start]"], app_log["update_vertex[end]"]) << " s" << endl;
     cout << "-\t delete_vertex: " << time_passed(app_log["delete_vertex[start]"], app_log["delete_vertex[end]"]) << " s" << endl;
-    cout << "-\t init_position: " << time_passed(app_log["init_position[start]"], app_log["init_position[end]"]) << " s" << endl;
     cout << "-\t remove_edges: " << time_passed(app_log["remove_edges[start]"], app_log["remove_edges[end]"]) << " s" << endl;
     cout << "-\t remove_triangle: " << time_passed(app_log["remove_triangle[start]"], app_log["remove_triangle[end]"]) << " s" << endl;
     cout << "-\t remove_quad: " << time_passed(app_log["remove_quad[start]"], app_log["remove_quad[end]"]) << " s" << endl;
     cout << "-\t add_edge: " << time_passed(app_log["add_edge[start]"], app_log["add_edge[end]"]) << " s" << endl;
     cout << "-\t add_triangle: " << time_passed(app_log["add_triangle[start]"], app_log["add_triangle[end]"]) << " s" << endl;
     cout << "-\t add_quad: " << time_passed(app_log["add_quad[start]"], app_log["add_quad[end]"]) << " s" << endl;
-    cout << "-\t rebuild_index: " << time_passed(app_log["rebuild_index[start]"], app_log["rebuild_index[end]"]) << " s" << endl;
+    cout << "-\t indexing_vertex: " << time_passed(app_log["indexing_vertex[start]"], app_log["indexing_vertex[end]"]) << " s" << endl;
+    cout << "-\t indexing_triangle: " << time_passed(app_log["indexing_triangle[start]"], app_log["indexing_triangle[end]"]) << " s" << endl;
+    cout << "-\t indexing_quad: " << time_passed(app_log["indexing_quad[start]"], app_log["indexing_quad[end]"]) << " s" << endl;
+    cout << "-\t indexing_edge: " << time_passed(app_log["indexing_edge[start]"], app_log["indexing_edge[end]"]) << " s" << endl;
+    cout << "\n-\t indexing: " << time_passed(app_log["indexing[start]"], app_log["indexing[end]"]) << " s" << endl;
     cout << "\n-\t apply_diff: " << time_passed(app_log["apply_diff[start]"], app_log["apply_diff[end]"]) << " s" << endl;
-    
-    cout << "\n-\t test: " << time_passed(app_log["apply_test[start]"], app_log["apply_test[end]"]) << " s" << endl;
-    cout << "\n-\t test: " << time_passed(app_log["apply_test2[start]"], app_log["apply_test2[end]"]) << " s" << endl;
+
 
 }
 
 
 int main(int argc, const char * argv[]) {
-    print_apply_log();
+    print_apply_log("../log/apply_timing_v03");
+    cout << "\n----------------------\n";
+    print_apply_log("../log/apply_timing_v05");
+    cout << "\n----------------------\n";
+    print_apply_log("../log/apply_timing_v35");
+
     return 0;
 }

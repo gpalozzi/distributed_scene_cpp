@@ -12,6 +12,7 @@
 #endif
 
 #include "scene_distributed.h"
+#include "obj_parser.h"
 #include "serialization.hpp"
 #include "image.h"
 #include "id_reference.h"
@@ -35,6 +36,7 @@
 
 
 #include <cstdio>
+#include <sstream>
 
 #define PICOJSON_USE_INT64
 
@@ -45,6 +47,7 @@ int gl_program_id = 0;          // OpenGL program handle
 int gl_vertex_shader_id = 0;    // OpenGL vertex shader handle
 int gl_fragment_shader_id = 0;  // OpenGL fragment shader handle
 map<image3f*,int> gl_texture_id;// OpenGL texture handles
+
 
 //map<timestamp_t,Mesh*> mesh_history;
 
@@ -260,11 +263,14 @@ void shade(Scene* scene, bool wireframe) {
 		
 		// draw triangles and quads
 		if(not wireframe) {
-			if(mesh->triangle.size()) glDrawElements(GL_TRIANGLES, mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
-			if(mesh->quad.size()) glDrawElements(GL_QUADS, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
+            //            if(mesh->triangle.size()) glDrawElements(GL_TRIANGLES, mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
+            //            if(mesh->quad.size()) glDrawElements(GL_QUADS, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
+            if(mesh->triangle.size()) glDrawRangeElements(GL_TRIANGLES, 0, mesh->pos.size() - 1,  mesh->triangle_index.size()*3, GL_UNSIGNED_INT, &mesh->triangle_index[0].x);
+            if(mesh->quad.size()) glDrawRangeElements(GL_QUADS, 0, mesh->pos.size() - 1, mesh->quad_index.size()*4, GL_UNSIGNED_INT, &mesh->quad_index[0].x);
 		} else {
 			//auto edges = EdgeMap(mesh->triangle, mesh->quad).edges();
-            if(mesh->edge.size()) glDrawElements(GL_LINES, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
+            //if(mesh->edge.size()) glDrawElements(GL_LINES, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
+            if(mesh->edge.size()) glDrawRangeElements(GL_LINES,  0, mesh->pos.size() - 1, mesh->edge_index.size()*2, GL_UNSIGNED_INT, &mesh->edge_index[0].x);
 		}
 		
 		// draw line sets
@@ -283,15 +289,17 @@ void shade(Scene* scene, bool wireframe) {
 string scene_filename;          // scene filename
 string image_filename;          // image filename
 Scene* scene;                   // scene arrays
+Scene* scene2;
 bool save = false;              // whether to start the save loop
 bool wireframe = false;         // display as wireframe
 bool mesh_mat = false;
 bool mesh_ver = false;
 bool mesh_rot = false;
-bool have_msg = false;
+bool check = false;
 bool restore_old = false;
 bool write_log    = false;
-//bool send_submesh = false;    to implement if needed
+bool sync_scene = false;
+int c = 1;
 
 // glfw callback for character input
 void character_callback(GLFWwindow* window, unsigned int key) {
@@ -311,8 +319,8 @@ void character_callback(GLFWwindow* window, unsigned int key) {
 			//        case 'r':
 			//            mesh_rot = true;
 			//            break;
-		case 'h':
-			have_msg = true;
+		case 'c':
+			check = true;
 			break;
 		case 'r':
 			restore_old = true;
@@ -320,10 +328,9 @@ void character_callback(GLFWwindow* window, unsigned int key) {
         case 'l':
             write_log = true;
             break;
-
-//        case 'a':
-//            send_submesh = true;
-//            break;
+        case 'a':
+            sync_scene = true;
+            break;
 
 	}
 }
@@ -346,14 +353,14 @@ void restore_mesh(Mesh &m, const char * filename)
     ia >> m;
 }
 
-void save_submesh(const SubMesh &m, const char * filename){
+void save_meshdiff(const MeshDiff &m, const char * filename){
     // make an archive
     std::ofstream ofs(filename);
     boost::archive::text_oarchive oa(ofs);
     oa << m;
 }
 
-void restore_submesh(SubMesh &m, const char * filename)
+void restore_meshdiff(MeshDiff &m, const char * filename)
 {
     // open the archive
     std::ifstream ifs(filename);
@@ -442,26 +449,18 @@ void uiloop(editor_server* server) {
 			mesh_rot = false;
 		}
 //		  to do: implement if needed
-//        if(send_submesh){
-//            message("Mesh versions:\n");
-//            for(auto i : range(6)){
-//                message("version [%d]\n",i);
-//            }
-//            message("Chose version (-1 to exit): ");
-//            auto choice = 1;
-//            std::cin >> choice;
-//            if (choice >= 0 && choice <= 5 && choice != scene->meshes[0]->_version) {
-//                auto diff = new SubMesh();
-//                string filename = "../scenes/diff/m" + to_string(scene->meshes[0]->_version) + "tom" + to_string(choice);
-//                restore_submesh(*diff, filename.c_str());
-//                // apply changes to mesh
-//                apply_changes(scene->meshes[0], diff, true);
-//                // send submesh
-//                server->write(diff);
-//            }
-//            
-//            send_submesh = false;
-//        }
+        if(sync_scene){
+            timestamp_t old = get_global_version();
+            auto version = restore_version(scene);
+            
+            if(old != version){
+                stringstream restore_message;
+                restore_message << "restore_version " << version;
+                server->write_all(restore_message.str().c_str());
+            }
+            
+            sync_scene = false;
+        }
 
 		while(server->has_pending_op()){
 			//prendi la prossima operazione
@@ -486,6 +485,15 @@ void uiloop(editor_server* server) {
             auto msg = server->get_next_pending();
             // switch between message type
             switch (msg->type()) {
+                case 0: // Message
+                {
+                    auto message_tokens = msg->as_message();
+                    if(message_tokens[0] == "restore_version"){
+                        restore_to_version(scene, atoll(message_tokens[1].c_str()));
+                        message("scene restored to version %llu", message_tokens[1].c_str());
+                    }
+                }
+                    break;
                 case 1: // Mesh
                 {
                     // get the next mesh recived
@@ -496,55 +504,76 @@ void uiloop(editor_server* server) {
                     server->remove_first();
                 }
                     break;
-                case 2: // SubMesh
+                case 2: // SceneDiff
                 {
-                    // get the next mesh recived
                     timing("deserialize_from_msg[start]");
-                    auto submesh = msg->as_submesh();
+                    auto scenediff = msg->as_scenediff();
                     timing("deserialize_from_msg[end]");
                     // apply differences
                     timing("apply_diff[start]");
-                    apply_changes(scene->meshes[0], submesh, true);
+                    apply_change_reverse(scene, scenediff, scenediff->_label);
                     timing("apply_diff[end]");
                     message("actual mesh version: %d\n", scene->meshes[0]->_version);
+                    // remove from queue
+                    // remove from queue
+                    server->remove_first();
+                }
+                    break;
+                case 3: // MeshDiff
+                {
+                    // get the next mesh recived
+                    timing("deserialize_from_msg[start]");
+                    auto meshdiff = msg->as_meshdiff();
+                    timing("deserialize_from_msg[end]");
+                    // apply differences
+                    timing("apply_diff[start]");
+                    timing_apply("apply_diff[start]");
+                    apply_mesh_change(scene->meshes[0], meshdiff, get_timestamp());
+                    timing("apply_diff[end]");
+                    timing_apply("apply_diff[end]");
+                    message("actual mesh version: %d\n", scene->meshes[0]->_version);
+                    // remove from queue
+                    server->remove_first();
+                }
+                    break;
+                case 7: // OBJ - MTL
+                {
+                    // parse material and scene from obj & mtl
+                    auto tmp_scene = new Scene();
+                    obj_parse_materials(tmp_scene, msg->as_mtl());
+                    scene = obj_parse_scene(msg->as_obj(), false, tmp_scene);
+                    auto light = new Light();
+                    light->_id_ = 126128947120701270;
+                    light->frame.o = vec3f(2.0,6.0,5.0);
+                    light->intensity = vec3f(25.0,25.0,25.0);
+                    scene->meshes[0]->frame.o = vec3f(-2.0,0.0,-1.0);
+                    scene->lights.push_back(light);
+                    scene->camera = lookat_camera(vec3f(1.0,6.0,10.0), zero3f, y3f, 1.0f, 1.0f, 1.0f,129849216921865, 0);
+
+                    
+                    message("scene reloaded\n");
                     // remove from queue
                     server->remove_first();
                 }
                     break;
                 default:
                     break;
-            }		}
+            }
+        }
 		
         if(write_log){
             save_timing("server_timing_v" + scene_filename + to_string(scene->meshes[0]->_version));
             write_log = false;
         }
+		
+		if(check){
+            scene2 = load_obj_scene("../scenes/fat_v"+ to_string(c++) +".obj");
+            scene2->meshes[0]->frame.o = vec3f(-2.0,0.0,-1.0);
 
-		if(restore_old){
-            auto mesh = get_mesh_to_restrore();
-            if (mesh) {
-                swap_mesh(mesh, scene, true);
-            }
-		}
-		
-		
-		if(have_msg){
-			auto msg = server->get_next_pending_op();
-			
-			if(msg){
-				switch (msg[0]) {
-					case 'm':
-						mesh_mat = true;
-						break;
-					case 'v':
-						mesh_ver = true;
-						break;
-					case 'r':
-						mesh_rot = true;
-				}
-			}
-			else
-				have_msg = false;
+            auto diff = meshdiff_assume_ordered(scene->meshes[0], scene2->meshes[0]);
+            obj_apply_mesh_change(scene->meshes[0], diff, 0);
+            c = c % 5;
+            check = false;
 		}
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -553,11 +582,6 @@ void uiloop(editor_server* server) {
 	glfwDestroyWindow(window);
 	
 	glfwTerminate();
-}
-
-void test_mesh_diff(Scene* scene){
-    auto diff = new SubMesh(scene->meshes[1], scene->meshes[0]);
-    //apply_changes(scene->meshes[1], diff);
 }
 
 // main function
@@ -572,9 +596,10 @@ int main(int argc, char** argv) {
 	image_filename = (args.object_element("image_filename").as_string() != "") ?
 	args.object_element("image_filename").as_string() :
 	scene_filename.substr(0,scene_filename.size()-5)+".png";
-	// load scene from json
-    timing("parse_scene[start]");
-    scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
+    scene = load_json_scene("../scenes/shuttleply_v0.json");
+    scene->background = zero3f;
+    
+    //scene = load_json_scene("../scenes/shuttleply_v" + scene_filename + ".json");
     timing("parse_scene[end]");
 	if(not args.object_element("resolution").is_null()) {
 		scene->image_height = args.object_element("resolution").as_int();
@@ -583,10 +608,8 @@ int main(int argc, char** argv) {
 	
 	// not needed
 	//subdivide(scene);
-	
-    //test_mesh_diff(scene);
     
-	// start start
+	// start
 	
 	try {
 		boost::asio::io_service io_service;
@@ -594,7 +617,7 @@ int main(int argc, char** argv) {
 		tcp::endpoint endpoint(tcp::v4(), 3311);
 		editor_server server(io_service, endpoint);
 		std::thread t([&io_service](){ io_service.run(); });
-		
+        
 		uiloop(&server);
 		server.close();
 		io_service.stop();

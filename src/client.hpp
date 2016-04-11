@@ -42,54 +42,78 @@ public:
     }
     
     // write msg
-    void write(const op_message& msg)
-    {
-        io_service_.post(
-                         [this, msg]()
-                         {
-                             bool write_in_progress = !write_msgs_.empty();
-                             // push into write obj
-                             write_msgs_.push_back(msg);
-                             if (!write_in_progress)
-                             {
-                                 do_write();
-                             }
-                         });
-    }
+//    void write(const op_message& msg)
+//    {
+//        io_service_.post(
+//                         [this, msg]()
+//                         {
+//                             bool write_in_progress = !write_msgs_.empty();
+//                             // push into write obj
+//                             write_msgs_.push_back(msg);
+//                             if (!write_in_progress)
+//                             {
+//                                 do_write();
+//                             }
+//                         });
+//    }
+//    
+//    // send mesh on socket
+//    void write(const Mesh* mesh)
+//    {
+//        io_service_.post(
+//                         [this, mesh]()
+//                         {
+//                             
+//                             // build serialized mesh
+//                             // build header
+//                             auto m_msg = mesh_msg(mesh);
+//                             // check if write in progress
+//                             bool write_in_progress = !write_meshes_.empty();
+//                             // push into mesh to write
+//                             write_meshes_.push_back(m_msg);
+//                             if (!write_in_progress)
+//                             {
+//                                 // write on socket
+//                                 // need to unify do_write and do_write_mesh function!!!!
+//                                 do_write_mesh();
+//                             }
+//                         });
+//    }
+//    
+//    // send meshdiff on socket
+//    void write(const MeshDiff* meshdiff)
+//    {
+//        io_service_.post(
+//                         [this, meshdiff]()
+//                         {
+//                             
+//                             // build serialized mesh
+//                             // build header
+//                             auto m_msg = mesh_msg(meshdiff);
+//                             // check if write in progress
+//                             bool write_in_progress = !write_meshes_.empty();
+//                             // push into mesh to write
+//                             write_meshes_.push_back(m_msg);
+//                             if (!write_in_progress)
+//                             {
+//                                 // write on socket
+//                                 // need to unify do_write and do_write_mesh function!!!!
+//                                 timing("send_mesh[start]");
+//                                 do_write_mesh();
+//                             }
+//                         });
+//    }
     
-    // send mesh on socket
-    void write(const Mesh* mesh)
+    template <typename T>
+    void write(const T obj)
     {
         io_service_.post(
-                         [this, mesh]()
+                         [this, obj]()
                          {
                              
                              // build serialized mesh
                              // build header
-                             auto m_msg = mesh_msg(mesh);
-                             // check if write in progress
-                             bool write_in_progress = !write_meshes_.empty();
-                             // push into mesh to write
-                             write_meshes_.push_back(m_msg);
-                             if (!write_in_progress)
-                             {
-                                 // write on socket
-                                 // need to unify do_write and do_write_mesh function!!!!
-                                 do_write_mesh();
-                             }
-                         });
-    }
-    
-    // send submesh on socket
-    void write(const SubMesh* submesh)
-    {
-        io_service_.post(
-                         [this, submesh]()
-                         {
-                             
-                             // build serialized mesh
-                             // build header
-                             auto m_msg = mesh_msg(submesh);
+                             auto m_msg = mesh_msg(obj);
                              // check if write in progress
                              bool write_in_progress = !write_meshes_.empty();
                              // push into mesh to write
@@ -215,21 +239,29 @@ private:
                                     if (!ec)
                                     {
                                         // ack?
-                                        pending_meshes_.push_back(read_incoming_mesh_);
                                         timing("recive_mesh[end]");
                                         timing("mesh_size", (long long) read_incoming_mesh_.length() );
                                         // print recived op
                                         switch (read_incoming_mesh_.type()) {
+                                            case 0: // Message
+                                                message("message recived\n");
+                                                break;
                                             case 1: // Mesh
                                                 message("mesh recived\n");
                                                 break;
-                                            case 2: // SubMesh
-                                                message("submesh recived\n");
+                                            case 2: // MeshDiff
+                                                message("meshdiff recived\n");
                                                 break;
-                                                
+                                            case 7: // OBJ - MTL
+                                            {
+                                                message("obj/mtl recived\n");
+                                                error_if_not(read_incoming_mesh_.decode_body(), "error decoding obj/mtl body\n");
+                                            }
+                                                break;
                                             default:
                                                 break;
                                         }
+                                        pending_meshes_.push_back(read_incoming_mesh_);
                                         do_read_mesh_header();
                                     }
                                     else

@@ -12,8 +12,22 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <map>
+#include <tuple>
+#include <vector>
+#include "common.h"
+#include <boost/algorithm/string.hpp>
+#include "obj_parser.h"
 
+
+using namespace std;
 int main(int argc, const char * argv[]) {
+    
+    string file = "/Users/gpalozzi/Desktop/shuttle.obj";
+    auto scene = load_obj_scene(file);
+   
+    message("done\n");
+    return 0;
 //    std::chrono::time_point<std::chrono::system_clock> start, end;
 //    start = std::chrono::system_clock::now();
 //    end = std::chrono::system_clock::now();
@@ -96,51 +110,51 @@ int main(int argc, const char * argv[]) {
 //    std::cout << "past: " << past << '\n';
 //    std::cout << "duration in s: " << time_passed << '\n';
     
-    std::time_t t = std::time(nullptr);
-    auto sec = std::localtime(&t)->tm_sec;
-    auto limit = (sec + 5) % 60;
-    while (not (sec == limit)) {
-        t = std::time(nullptr);
-        sec = std::localtime(&t)->tm_sec;
-    }
-
-    
-    std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::microseconds> start_micro = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now());
-    std::chrono::high_resolution_clock::time_point read_begin = std::chrono::high_resolution_clock::now();
-    long long l_start = start_micro.time_since_epoch().count();
-    long long simple_start = read_begin.time_since_epoch().count();
-
-    t = std::time(nullptr);
-    sec = std::localtime(&t)->tm_sec;
-    while (not (sec == (limit + 5) % 60)) {
-        t = std::time(nullptr);
-        sec = std::localtime(&t)->tm_sec;
-    }
-
-    std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::microseconds> end_micro = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now());
-    std::chrono::high_resolution_clock::time_point read_end = std::chrono::high_resolution_clock::now();
-    long long l_end = end_micro.time_since_epoch().count();
-    long long simple_end = read_end.time_since_epoch().count();
-    
-    auto d = read_end.time_since_epoch();
-
-    float time_long = (l_end - l_start) / 1000000.0f;
-    float time_long_simple = (simple_end - simple_start) / (float)std::chrono::high_resolution_clock::period::den;
-    double time_long_simple_d = (simple_end - simple_start) / (double)std::chrono::high_resolution_clock::period::den;
-
-    double time_point_t = (end_micro - start_micro).count() / 1000000.0f;
-    double time = std::chrono::duration_cast<std::chrono::microseconds>(end_micro - start_micro).count() / 1000000.0f;
-    std::chrono::microseconds ms = std::chrono::duration_cast<std::chrono::microseconds>(end_micro - start_micro);
-    double time_ms = ms.count() / 1000000.0f;
-    std::cout << "long: " << time_long << '\n';
-    std::cout << "simple_long: " << time_long_simple << '\n';
-    std::cout << "simple_long_double: " << time_long_simple_d << '\n';
-    std::cout << "time_point: " << time_point_t << '\n';
-    std::cout << "duration_cast: " << time << '\n';
-    std::cout << "microsecond: " <<  time_ms  << '\n';
-
-    std::cout << "done" << '\n';
-
+//    std::time_t t = std::time(nullptr);
+//    auto sec = std::localtime(&t)->tm_sec;
+//    auto limit = (sec + 5) % 60;
+//    while (not (sec == limit)) {
+//        t = std::time(nullptr);
+//        sec = std::localtime(&t)->tm_sec;
+//    }
+//
+//    
+//    std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::microseconds> start_micro = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now());
+//    std::chrono::high_resolution_clock::time_point read_begin = std::chrono::high_resolution_clock::now();
+//    long long l_start = start_micro.time_since_epoch().count();
+//    long long simple_start = read_begin.time_since_epoch().count();
+//
+//    t = std::time(nullptr);
+//    sec = std::localtime(&t)->tm_sec;
+//    while (not (sec == (limit + 5) % 60)) {
+//        t = std::time(nullptr);
+//        sec = std::localtime(&t)->tm_sec;
+//    }
+//
+//    std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::microseconds> end_micro = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now());
+//    std::chrono::high_resolution_clock::time_point read_end = std::chrono::high_resolution_clock::now();
+//    long long l_end = end_micro.time_since_epoch().count();
+//    long long simple_end = read_end.time_since_epoch().count();
+//    
+//    auto d = read_end.time_since_epoch();
+//
+//    float time_long = (l_end - l_start) / 1000000.0f;
+//    float time_long_simple = (simple_end - simple_start) / (float)std::chrono::high_resolution_clock::period::den;
+//    double time_long_simple_d = (simple_end - simple_start) / (double)std::chrono::high_resolution_clock::period::den;
+//
+//    double time_point_t = (end_micro - start_micro).count() / 1000000.0f;
+//    double time = std::chrono::duration_cast<std::chrono::microseconds>(end_micro - start_micro).count() / 1000000.0f;
+//    std::chrono::microseconds ms = std::chrono::duration_cast<std::chrono::microseconds>(end_micro - start_micro);
+//    double time_ms = ms.count() / 1000000.0f;
+//    std::cout << "long: " << time_long << '\n';
+//    std::cout << "simple_long: " << time_long_simple << '\n';
+//    std::cout << "simple_long_double: " << time_long_simple_d << '\n';
+//    std::cout << "time_point: " << time_point_t << '\n';
+//    std::cout << "duration_cast: " << time << '\n';
+//    std::cout << "microsecond: " <<  time_ms  << '\n';
+//
+//    std::cout << "done" << '\n';
+//
 //
 //    auto start_time = std::chrono::high_resolution_clock::now();
 //
